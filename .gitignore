@@ -1,0 +1,8 @@
+node_modules
+.nuxt
+dist
+.env
+
+# local editors
+.vscode
+.idea
