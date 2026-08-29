@@ -1,26 +1,24 @@
 <template>
   <div>
-    <section class="border-b border-ink/10 bg-shell/50">
-      <div class="container-bm py-16 md:py-20">
-        <p class="eyebrow">The collection</p>
-        <h1 class="mt-3 font-display text-4xl font-semibold text-ink md:text-5xl">Shop swimwear</h1>
-        <p class="mt-4 max-w-xl text-lg leading-relaxed text-ink/65">
-          Every piece is made to order and finished by hand. Choose a style below, or
-          <NuxtLink to="/contact" class="text-ocean link-underline">commission a custom design</NuxtLink>.
-        </p>
+    <section class="border-b border-ink/10 bg-shell/60">
+      <div class="container-bm py-16 md:py-20 text-center">
+        <FancyHeading eyebrow="The Collection" title="Shop the *Islands*" center size="lg">
+          Every piece is made to order and finished by hand. Pick a style, or
+          <NuxtLink to="/contact" class="text-coral link-underline">design your own</NuxtLink>.
+        </FancyHeading>
       </div>
     </section>
 
-    <section class="container-bm py-14">
+    <section class="section container-bm">
       <div class="flex flex-wrap items-center gap-2">
         <button
           v-for="f in filters"
           :key="f.value"
-          class="rounded-full border px-4 py-2 text-sm font-medium transition-colors"
+          class="rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-widest2 transition-colors"
           :class="
             active === f.value
-              ? 'border-ink bg-ink text-sand'
-              : 'border-ink/15 text-ink/70 hover:border-ink/40'
+              ? 'border-ink bg-ink text-cream'
+              : 'border-ink/15 text-ink/60 hover:border-ink/40'
           "
           @click="active = f.value"
         >
@@ -37,9 +35,11 @@
         No pieces in this category yet — check back soon.
       </p>
 
-      <div class="mt-20 rounded-3xl bg-ink px-8 py-12 text-center text-sand md:px-14">
-        <h2 class="font-display text-2xl font-semibold md:text-3xl">Don't see your perfect suit?</h2>
-        <p class="mx-auto mt-3 max-w-md text-sand/75">
+      <div class="mt-20 rounded-4xl bg-ink px-8 py-12 text-center text-cream shadow-soft md:px-14">
+        <h2 class="font-display text-2xl font-semibold md:text-3xl">
+          Don't see your <span class="fancy-accent">perfect</span> suit?
+        </h2>
+        <p class="mx-auto mt-3 max-w-md text-cream/75">
           Custom cuts, colours and prints are our specialty. Tell us what you're picturing.
         </p>
         <NuxtLink to="/contact" class="btn-primary mt-7">Start a custom order</NuxtLink>
@@ -50,16 +50,11 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { products } from '~/data/products.js'
+import { products, categories } from '~/data/products.js'
 
 const route = useRoute()
 
-const filters = [
-  { value: 'all', label: 'All' },
-  { value: 'One-Piece', label: 'One-Piece' },
-  { value: 'Bikini', label: 'Bikini' },
-  { value: 'Cover-Up', label: 'Cover-Ups' }
-]
+const filters = [{ value: 'all', label: 'All' }, ...categories.map((c) => ({ value: c.value, label: c.label }))]
 
 const initial = filters.some((f) => f.value === route.query.category)
   ? String(route.query.category)
