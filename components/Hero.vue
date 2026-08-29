@@ -1,17 +1,51 @@
 <template>
-  <section class="py-20 bg-gradient-to-b from-white to-gray-50">
-    <div class="max-w-5xl mx-auto px-6 md:px-12 flex flex-col md:flex-row items-center gap-8">
-      <div class="flex-1">
-        <h1 class="text-3xl md:text-5xl font-bold mb-4">Bahama Mama Swimwear</h1>
-        <p class="text-gray-700 mb-6 max-w-xl">Made-to-order swimwear handcrafted in Grenada. Modern, minimal pieces tailored to you.</p>
-        <div class="space-x-4">
-          <a href="#products" class="inline-block bg-brand text-white px-6 py-3 rounded-md">Shop featured</a>
-          <a href="#contact" class="inline-block text-gray-700 px-6 py-3 rounded-md border border-gray-200">Contact us</a>
+  <section class="relative overflow-hidden bg-sand">
+    <div class="container-bm grid items-center gap-12 py-16 md:grid-cols-2 md:py-24">
+      <div class="relative z-10">
+        <p class="eyebrow">Caribbean swimwear · Made to order</p>
+        <h1 class="mt-4 font-display text-4xl font-semibold leading-[1.05] text-ink md:text-6xl">
+          Made for
+          <span class="mt-1 block font-script text-5xl font-normal text-ocean md:text-7xl">Island Days</span>
+        </h1>
+        <p class="mt-6 max-w-md text-lg leading-relaxed text-ink/70">
+          High-quality, made-to-order and custom swimwear — cut to fit you and finished by hand in
+          the Caribbean. Affordable luxury for wherever the water takes you.
+        </p>
+        <div class="mt-9 flex flex-wrap gap-4">
+          <NuxtLink to="/shop" class="btn-primary">Shop the collection</NuxtLink>
+          <NuxtLink to="/contact" class="btn-outline">Start a custom piece</NuxtLink>
         </div>
+        <dl class="mt-12 grid max-w-md grid-cols-3 gap-6 border-t border-ink/10 pt-6">
+          <div>
+            <dt class="font-display text-2xl text-ink">100%</dt>
+            <dd class="text-xs uppercase tracking-widest2 text-ink/40">Made to order</dd>
+          </div>
+          <div>
+            <dt class="font-display text-2xl text-ink">XS–3X</dt>
+            <dd class="text-xs uppercase tracking-widest2 text-ink/40">Every body</dd>
+          </div>
+          <div>
+            <dt class="font-display text-2xl text-ink">Global</dt>
+            <dd class="text-xs uppercase tracking-widest2 text-ink/40">Shipping</dd>
+          </div>
+        </dl>
       </div>
 
-      <div class="w-full md:w-1/2 rounded-lg overflow-hidden shadow-md">
-        <img src="https://images.unsplash.com/photo-1503341455253-b2e723bb3dbb?w=1200&q=80&auto=format&fit=crop" alt="Swimwear on the beach" class="w-full h-64 object-cover" />
+      <div class="relative">
+        <div class="absolute -right-10 -top-10 h-72 w-72 rounded-full bg-coral/15 blur-3xl" aria-hidden="true" />
+        <div class="absolute -bottom-12 -left-8 h-64 w-64 rounded-full bg-blush/25 blur-3xl" aria-hidden="true" />
+        <div class="relative grid grid-cols-2 gap-4">
+          <img
+            src="https://images.unsplash.com/photo-1544829099-b9a0c07fad1a?w=800&q=80&auto=format&fit=crop"
+            alt="Model wearing Bahama Mama swimwear on the beach"
+            class="mt-8 aspect-[3/4] w-full rounded-2xl object-cover"
+          />
+          <img
+            src="https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=800&q=80&auto=format&fit=crop"
+            alt="Caribbean coastline"
+            class="aspect-[3/4] w-full rounded-2xl object-cover"
+          />
+        </div>
       </div>
     </div>
   </section>
