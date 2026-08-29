@@ -27,15 +27,11 @@
         <span class="ml-auto text-sm text-ink/40">{{ visible.length }} pieces</span>
       </div>
 
-      <p v-if="error" class="mt-12 text-sm text-coral-dark">
-        We couldn't load the collection just now. Please refresh to try again.
-      </p>
-
-      <div v-else class="mt-10 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="mt-10 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
         <ProductCard v-for="p in visible" :key="p.id" :product="p" />
       </div>
 
-      <p v-if="!error && !pending && visible.length === 0" class="mt-10 text-ink/50">
+      <p v-if="visible.length === 0" class="mt-10 text-ink/50">
         No pieces in this category yet — check back soon.
       </p>
 
@@ -54,7 +50,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { categories } from '~/data/products.js'
+import { categories, getProductsByCategory } from '~/data/products.js'
 
 const route = useRoute()
 
@@ -65,10 +61,5 @@ const initial = filters.some((f) => f.value === route.query.category)
   : 'all'
 const active = ref(initial)
 
-const { data, pending, error } = await useFetch('/api/products', { key: 'products' })
-
-const items = computed(() => data.value?.items ?? [])
-const visible = computed(() =>
-  active.value === 'all' ? items.value : items.value.filter((p) => p.category === active.value)
-)
+const visible = computed(() => getProductsByCategory(active.value))
 </script>

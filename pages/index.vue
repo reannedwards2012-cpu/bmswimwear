@@ -312,22 +312,14 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { categories } from '~/data/products.js'
+import { categories, getProductsByCategory } from '~/data/products.js'
 
 const GRID_LIMIT = 12 // 4 columns × 3 rows
 
 const tabs = [{ value: 'all', label: 'All' }, ...categories.map((c) => ({ value: c.value, label: c.label }))]
 const activeTab = ref('all')
 
-const { data: productData } = await useFetch('/api/products', { key: 'products' })
-const allProducts = computed(() => productData.value?.items ?? [])
-
-const visibleProducts = computed(() => {
-  const list = activeTab.value === 'all'
-    ? allProducts.value
-    : allProducts.value.filter((p) => p.category === activeTab.value)
-  return list.slice(0, GRID_LIMIT)
-})
+const visibleProducts = computed(() => getProductsByCategory(activeTab.value).slice(0, GRID_LIMIT))
 
 const steps = [
   { title: 'Choose your style', body: 'Browse the collection or share your dream design with our team.' },

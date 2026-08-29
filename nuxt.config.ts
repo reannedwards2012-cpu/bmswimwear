@@ -13,10 +13,6 @@ export default defineNuxtConfig({
     }
   },
 
-  // Internal product database — server-side only. The SQLite file lives in
-  // .data/ (git-ignored) and is never exposed to the browser; the frontend
-  // only ever talks to the read-only /api/products endpoints.
-
   app: {
     head: {
       title: 'Bahama Mama Swimwear — Made-to-order Caribbean swimwear',
