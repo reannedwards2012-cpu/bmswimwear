@@ -21,7 +21,6 @@
           <NuxtLink to="/shop" class="btn-primary shadow-soft">Shop the collection</NuxtLink>
           <NuxtLink to="/contact" class="btn-outline">Design your own</NuxtLink>
         </div>
-        <p class="mt-6 font-script text-2xl text-rose">confident · feminine · a little bit extra</p>
       </div>
 
       <div class="relative">
@@ -36,9 +35,6 @@
             alt="Caribbean shoreline"
             class="aspect-[3/4] w-full rounded-4xl object-cover shadow-card"
           />
-        </div>
-        <div class="absolute -bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-cream px-5 py-2 text-center text-xs font-semibold uppercase tracking-widest2 text-ink shadow-soft">
-          🐚 Fits XS–3X · every body
         </div>
       </div>
     </div>
