@@ -19,29 +19,40 @@
         fabrics and an easy Caribbean confidence.
       </FancyHeading>
 
-      <div class="mt-14 space-y-16">
-        <div v-for="cat in categories" :key="cat.value">
-          <div class="flex flex-wrap items-end justify-between gap-3 border-b border-ink/10 pb-4">
-            <div>
-              <h3 class="font-display text-2xl font-semibold text-ink md:text-3xl">{{ cat.label }}</h3>
-              <p class="mt-1 text-sm text-ink/50">{{ cat.blurb }}</p>
-            </div>
-            <NuxtLink
-              :to="`/shop?category=${cat.value}`"
-              class="link-underline text-xs font-semibold uppercase tracking-widest2 text-coral"
-            >
-              Shop all {{ cat.label }} →
-            </NuxtLink>
-          </div>
+      <!-- category tabs -->
+      <div class="mt-10 flex flex-wrap justify-center gap-2 md:gap-3">
+        <button
+          v-for="tab in tabs"
+          :key="tab.value"
+          type="button"
+          class="rounded-full border px-5 py-2 text-xs font-semibold uppercase tracking-widest2 transition-colors"
+          :class="
+            activeTab === tab.value
+              ? 'border-ink bg-ink text-cream'
+              : 'border-ink/15 text-ink/60 hover:border-ink/40 hover:text-ink'
+          "
+          @click="activeTab = tab.value"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
 
-          <div class="mt-8 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-            <ProductCard
-              v-for="p in byCategory(cat.value)"
-              :key="p.id"
-              :product="p"
-            />
-          </div>
-        </div>
+      <!-- up to 12 products · 4 columns × 3 rows -->
+      <div class="mt-10 grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 lg:grid-cols-4">
+        <ProductCard v-for="p in visibleProducts" :key="p.id" :product="p" />
+      </div>
+
+      <p v-if="visibleProducts.length === 0" class="mt-10 text-center text-ink/50">
+        New pieces landing soon — check back shortly.
+      </p>
+
+      <div class="mt-12 text-center">
+        <NuxtLink
+          :to="activeTab === 'all' ? '/shop' : `/shop?category=${activeTab}`"
+          class="btn-outline"
+        >
+          View the full collection
+        </NuxtLink>
       </div>
     </section>
 
@@ -300,10 +311,23 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
-import { products, categories } from '~/data/products.js'
+import { computed, reactive, ref } from 'vue'
+import { categories } from '~/data/products.js'
 
-const byCategory = (value) => products.filter((p) => p.category === value)
+const GRID_LIMIT = 12 // 4 columns × 3 rows
+
+const tabs = [{ value: 'all', label: 'All' }, ...categories.map((c) => ({ value: c.value, label: c.label }))]
+const activeTab = ref('all')
+
+const { data: productData } = await useFetch('/api/products', { key: 'products' })
+const allProducts = computed(() => productData.value?.items ?? [])
+
+const visibleProducts = computed(() => {
+  const list = activeTab.value === 'all'
+    ? allProducts.value
+    : allProducts.value.filter((p) => p.category === activeTab.value)
+  return list.slice(0, GRID_LIMIT)
+})
 
 const steps = [
   { title: 'Choose your style', body: 'Browse the collection or share your dream design with our team.' },

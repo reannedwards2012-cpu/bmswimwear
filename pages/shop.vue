@@ -14,7 +14,7 @@
         <button
           v-for="f in filters"
           :key="f.value"
-          class="rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-widest2 transition-colors"
+          class="rounded-full border px-5 py-2 text-xs font-semibold uppercase tracking-widest2 transition-colors"
           :class="
             active === f.value
               ? 'border-ink bg-ink text-cream'
@@ -27,11 +27,15 @@
         <span class="ml-auto text-sm text-ink/40">{{ visible.length }} pieces</span>
       </div>
 
-      <div class="mt-10 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+      <p v-if="error" class="mt-12 text-sm text-coral-dark">
+        We couldn't load the collection just now. Please refresh to try again.
+      </p>
+
+      <div v-else class="mt-10 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
         <ProductCard v-for="p in visible" :key="p.id" :product="p" />
       </div>
 
-      <p v-if="visible.length === 0" class="mt-10 text-ink/50">
+      <p v-if="!error && !pending && visible.length === 0" class="mt-10 text-ink/50">
         No pieces in this category yet — check back soon.
       </p>
 
@@ -50,7 +54,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { products, categories } from '~/data/products.js'
+import { categories } from '~/data/products.js'
 
 const route = useRoute()
 
@@ -61,7 +65,10 @@ const initial = filters.some((f) => f.value === route.query.category)
   : 'all'
 const active = ref(initial)
 
+const { data, pending, error } = await useFetch('/api/products', { key: 'products' })
+
+const items = computed(() => data.value?.items ?? [])
 const visible = computed(() =>
-  active.value === 'all' ? products : products.filter((p) => p.category === active.value)
+  active.value === 'all' ? items.value : items.value.filter((p) => p.category === active.value)
 )
 </script>

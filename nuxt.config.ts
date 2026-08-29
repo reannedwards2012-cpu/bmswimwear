@@ -1,11 +1,35 @@
 export default defineNuxtConfig({
   css: ['~/assets/css/tailwind.css'],
 
+  experimental: {
+    appManifest: false
+  },
+
   // Nuxt ignores a root postcss.config.*; Tailwind must be wired here.
   postcss: {
     plugins: {
       tailwindcss: {},
       autoprefixer: {}
+    }
+  },
+
+  // Internal product database — server-side only. The SQLite file lives in
+  // .data/ (git-ignored) and is never exposed to the browser; the frontend
+  // only ever talks to the read-only /api/products endpoints.
+  
+  nitro: {
+    experimental: { database: true },
+    database: {
+      default: {
+        connector: 'node-sqlite',
+        options: { name: 'bmswim' }
+      }
+    },
+    routeRules: {
+      '/api/**': {
+        cors: false,
+        headers: { 'cache-control': 'no-store' }
+      }
     }
   },
 
@@ -22,13 +46,18 @@ export default defineNuxtConfig({
         { property: 'og:title', content: 'Bahama Mama Swimwear' },
         {
           property: 'og:description',
-          content: 'Made-to-order and custom Caribbean swimwear. Affordable luxury, designed to fit you.'
+          content:
+            'Made-to-order and custom Caribbean swimwear. Affordable luxury, designed to fit you.'
         },
         { property: 'og:type', content: 'website' }
       ],
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+        {
+          rel: 'preconnect',
+          href: 'https://fonts.gstatic.com',
+          crossorigin: ''
+        },
         {
           rel: 'stylesheet',
           href: 'https://fonts.googleapis.com/css2?family=Parisienne&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Poppins:wght@300;400;500;600&display=swap'

@@ -4,6 +4,9 @@ node_modules
 dist
 .env
 
+# local database (seeded on startup)
+.data
+
 # local editors
 .vscode
 .idea
