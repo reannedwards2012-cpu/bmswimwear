@@ -7,19 +7,19 @@
     <div class="container-bm relative grid items-center gap-12 py-16 md:grid-cols-2 md:py-24">
       <div class="relative z-10">
         <p class="inline-flex items-center gap-2 rounded-full bg-cream px-4 py-1.5 text-xs font-semibold uppercase tracking-widest2 text-coral shadow-sm">
-          🌴 Handmade in the Caribbean
+          🌴 Made in the Caribbean
         </p>
         <h1 class="mt-5 font-display text-5xl font-semibold leading-[1.02] text-ink md:text-7xl">
-          Made for
-          <span class="mt-1 block fancy-accent text-6xl md:text-[5.5rem]">Island Days</span>
+          A More <span class="fancy-accent">Personal</span> Kind of Swimwear
         </h1>
         <p class="mt-6 max-w-md text-lg leading-relaxed text-ink/70">
-          Hand-cut, made-to-order and fully custom swimwear — designed to hug your
-          curves and made to feel like a little luxury every time you wear it.
+          Swimwear designed and handmade in Grenada for beach days, boat rides,
+          Carnival and everything the Caribbean calls for. Shop ready-to-wear
+          pieces or have something custom made just for you.
         </p>
         <div class="mt-9 flex flex-wrap gap-4">
-          <NuxtLink to="/shop" class="btn-primary shadow-soft">Shop the collection</NuxtLink>
-          <NuxtLink to="/contact" class="btn-outline">Design your own</NuxtLink>
+          <NuxtLink to="/shop" class="btn-primary shadow-soft">SHOP SWIMWEAR</NuxtLink>
+          <NuxtLink to="/contact" class="btn-outline">GO CUSTOM</NuxtLink>
         </div>
       </div>
 
