@@ -85,7 +85,7 @@
 
           <ol class="mt-10 space-y-7">
             <li v-for="(step, i) in steps" :key="step.title" class="flex gap-5">
-              <span class="font-display text-2xl font-semibold text-coral">0{{ i + 1 }} —</span>
+              <span class="font-display text-2xl font-semibold text-coral">0{{ i + 1 }}</span>
               <div>
                 <h4 class="font-semibold text-ink">{{ step.title }}</h4>
                 <p class="mt-1 text-sm leading-relaxed text-ink/60">{{ step.body }}</p>
