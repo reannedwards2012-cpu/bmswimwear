@@ -2,9 +2,9 @@
   <div>
     <section class="border-b border-ink/10 bg-shell/60">
       <div class="container-bm py-16 md:py-20 text-center">
-        <FancyHeading eyebrow="The Collection" title="Shop the *Islands*" center size="lg">
-          Every piece is made to order and finished by hand. Pick a style, or
-          <NuxtLink to="/contact" class="text-coral link-underline">design your own</NuxtLink>.
+        <FancyHeading eyebrow="Swim, Your Way" title="Find Your *Favourite*" center size="lg">
+          Find the one that feels like you, or make it completely your own with a
+          custom design.
         </FancyHeading>
       </div>
     </section>

@@ -2,26 +2,32 @@
   <div>
     <section class="border-b border-ink/10 bg-shell/60">
       <div class="container-bm py-16 md:py-20 text-center">
-        <FancyHeading eyebrow="Our Story" title="Swimwear with *Island Soul*" center size="lg" />
+        <FancyHeading eyebrow="Our Story" title="A Love for *Swimwear*" center size="lg" />
       </div>
     </section>
 
     <section class="section container-bm grid gap-12 md:grid-cols-2">
       <div class="space-y-5 text-lg leading-relaxed text-ink/75">
         <p>
-          Bahama Mama Swimwear began with a simple frustration: swimwear that never quite fit, and
-          never quite felt like <em>us</em>. So we started making our own — one suit at a time, cut
-          to measure, on a small island where the sea is part of daily life.
+          I've loved swimsuits for as long as I can remember. Growing up in Grenada, there weren't
+          many places to find them, and even when I did, they weren't always quite what I had in mind.
         </p>
         <p>
-          Today every piece is still made to order. Nothing sits in a warehouse. When you order, we
-          draft the pattern, choose the fabric and sew it for your body — whether that's a size from
-          our range or a fully custom commission.
+          I was already hand sewing little adjustments to my clothes when my mom surprised me with a
+          sewing machine one Christmas. Naturally, I decided to make a swimsuit. A few YouTube videos
+          later, I had my first one. It wasn't perfect, but I was hooked. There was something about
+          imagining exactly what I wanted and being able to make it exist.
         </p>
         <p>
-          Our promise is affordable luxury: the fit, finish and fabric of a designer suit, made
-          honestly and priced fairly, by a team that genuinely loves this work.
+          That feeling is still a big part of Bahama Mama today. Sometimes you can't find the style
+          you want. Sometimes the fit just isn't right. Sometimes you want something made with you in
+          mind.
         </p>
+        <p>
+          So whether you fall in love with one of our designs or have something made completely your
+          own, that's what Bahama Mama is here for.
+        </p>
+        <p>Put it on and feel yourself.</p>
       </div>
       <div class="relative">
         <div class="aspect-[3/4] w-4/5 rounded-4xl bg-gradient-to-br from-ink to-coral shadow-card">
@@ -41,14 +47,7 @@
       </div>
     </section>
 
-    <section class="bg-shell/60 py-16 md:py-24">
-      <div class="container-bm grid gap-8 md:grid-cols-3">
-        <div v-for="s in stats" :key="s.label" class="text-center">
-          <div class="font-display text-4xl font-semibold text-coral">{{ s.value }}</div>
-          <div class="mt-2 text-[0.7rem] uppercase tracking-widest2 text-ink/45">{{ s.label }}</div>
-        </div>
-      </div>
-    </section>
+    <BrandPillars />
 
     <section class="section container-bm text-center">
       <h2 class="font-display text-3xl font-semibold text-ink md:text-4xl">
@@ -62,10 +61,3 @@
   </div>
 </template>
 
-<script setup>
-const stats = [
-  { value: '2018', label: 'Founded on-island' },
-  { value: '4,000+', label: 'Suits made to order' },
-  { value: '30+', label: 'Countries shipped to' }
-]
-</script>

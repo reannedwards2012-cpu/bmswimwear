@@ -192,15 +192,11 @@
           <div class="mt-8 flex flex-wrap gap-3">
             <NuxtLink to="/about" class="btn-outline">Read our story</NuxtLink>
           </div>
-          <dl class="mt-10 grid max-w-md grid-cols-3 gap-6 border-t border-ink/10 pt-6">
-            <div v-for="s in stats" :key="s.label">
-              <dt class="font-display text-3xl font-semibold text-coral">{{ s.value }}</dt>
-              <dd class="mt-1 text-[0.7rem] uppercase tracking-widest2 text-ink/45">{{ s.label }}</dd>
-            </div>
-          </dl>
         </div>
       </div>
     </section>
+
+    <BrandPillars />
 
     <!-- 7 · JOIN EMAIL LIST -->
     <section class="bg-ink">
@@ -341,12 +337,6 @@ const lookbook = [
   { kicker: 'Golden Hour', title: 'Sun-Kissed', gradient: 'bg-gradient-to-br from-coral to-gold', image: 'https://picsum.photos/seed/bahama-look-3/800/1040' },
   { kicker: 'Made for You', title: 'The Custom Edit', gradient: 'bg-gradient-to-br from-ocean-deep to-coral', image: 'https://picsum.photos/seed/bahama-look-4/800/1040' },
   { kicker: 'Resort', title: 'Boardwalk Ready', gradient: 'bg-gradient-to-br from-ink to-blush-deep', image: 'https://picsum.photos/seed/bahama-look-5/800/1040' }
-]
-
-const stats = [
-  { value: '500+', label: 'Happy customers' },
-  { value: '100%', label: 'Made to order' },
-  { value: '15+', label: 'Caribbean islands' }
 ]
 
 const socials = [
