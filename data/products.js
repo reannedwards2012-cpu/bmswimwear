@@ -13,6 +13,18 @@
  * Replace the `RAW` array + the exports with Supabase queries (e.g. inside a
  * `useProducts()` composable backed by `@supabase/supabase-js`), mapping each
  * row through `toProduct()` so the shape components receive never changes.
+ *
+ * ── Product detail fields ─────────────────────────────────────────────────
+ * `toProduct()` also exposes optional detail fields, empty until real data
+ * is added (the product page hides any section with no data — no invented
+ * sizes, colours, prints, materials or copy):
+ *   - images         → string[]  (gallery; falls back to [image])
+ *   - sizes          → string[]  e.g. ['XS','S','M','L']
+ *   - colours        → { name, hex }[]
+ *   - prints         → string[]
+ *   - details        → string[]  fit / care bullet points
+ *   - longDescription→ string    fuller copy (falls back to `description`)
+ * Add them to a RAW record to populate that section.
  */
 
 export const categories = [
@@ -27,8 +39,7 @@ const LOW_STOCK_THRESHOLD = 5
 
 const priceFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0
+  currency: 'USD'
 })
 
 const img = (seed) => `https://picsum.photos/seed/${seed}/900/1125`
@@ -64,11 +75,17 @@ export function toProduct(row) {
     id: row.id,
     title: row.title,
     description: row.description,
+    longDescription: row.longDescription ?? '',
     price,
     priceFormatted: priceFormatter.format(price),
     category: row.category,
     categoryLabel: CATEGORY_LABELS[row.category] ?? row.category,
     image: row.image,
+    images: row.images?.length ? row.images : [row.image],
+    sizes: row.sizes ?? [],
+    colours: row.colours ?? [],
+    prints: row.prints ?? [],
+    details: row.details ?? [],
     stock: row.stock,
     inStock: row.stock > 0,
     lowStock: row.stock > 0 && row.stock <= LOW_STOCK_THRESHOLD
@@ -81,3 +98,9 @@ export const getProductsByCategory = (value) =>
   value && value !== 'all' ? products.filter((p) => p.category === value) : products
 
 export const getProductById = (id) => products.find((p) => p.id === id)
+
+/** Up to `limit` other products in the same category (for "You may also like"). */
+export const getRelatedProducts = (product, limit = 3) =>
+  products
+    .filter((p) => p.category === product.category && p.id !== product.id)
+    .slice(0, limit)

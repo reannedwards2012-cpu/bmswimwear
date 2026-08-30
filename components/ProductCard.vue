@@ -1,36 +1,48 @@
 <template>
   <article class="group">
-    <div class="relative overflow-hidden rounded-4xl bg-shell shadow-card">
-      <img
-        :src="product.image"
-        :alt="product.title"
-        loading="lazy"
-        class="aspect-[4/5] w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-      />
+    <NuxtLink :to="`/shop/${product.id}`" class="block">
+      <div class="relative overflow-hidden rounded-4xl bg-shell shadow-card">
+        <img
+          :src="product.image"
+          :alt="product.title"
+          loading="lazy"
+          class="aspect-[4/5] w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+        />
 
-      <span
-        v-if="badge"
-        class="absolute left-4 top-4 rounded-full bg-cream/95 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-widest2 text-coral shadow-sm"
-      >
-        {{ badge }}
-      </span>
-
-      <div
-        class="pointer-events-none absolute inset-x-4 bottom-4 translate-y-3 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100"
-      >
-        <span class="flex w-full items-center justify-center rounded-full bg-ink/90 px-5 py-2.5 text-xs font-semibold uppercase tracking-widest2 text-cream backdrop-blur">
-          View details
+        <span
+          v-if="badge"
+          class="absolute left-4 top-4 rounded-full bg-cream/95 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-widest2 text-coral shadow-sm"
+        >
+          {{ badge }}
         </span>
-      </div>
-    </div>
 
-    <div class="mt-4 flex items-baseline justify-between gap-3">
-      <h3 class="font-display text-lg font-medium text-ink">{{ product.title }}</h3>
-      <p class="shrink-0 rounded-full bg-blush/25 px-3 py-1 text-sm font-semibold text-ink">
-        {{ product.priceFormatted }}
+        <div
+          class="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        >
+          <span
+            class="rounded-full border border-cream/40 bg-ink/20 px-7 py-3 text-xs font-semibold uppercase tracking-widest2 text-cream backdrop-blur-md"
+          >
+            View details
+          </span>
+        </div>
+      </div>
+
+      <p class="mt-4 text-[0.7rem] font-semibold uppercase tracking-widest2 text-ink/40">
+        {{ product.categoryLabel }}
       </p>
+      <h3 class="mt-1 font-display text-lg font-medium text-ink">{{ product.title }}</h3>
+    </NuxtLink>
+
+    <div class="mt-1.5 flex items-center justify-between gap-3">
+      <p class="text-base font-semibold text-coral">{{ product.priceFormatted }}</p>
+      <button
+        type="button"
+        aria-label="Add to bag"
+        class="inline-flex items-center gap-1.5 rounded-full border border-ink/25 px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-widest2 text-ink/70 transition-colors hover:border-ink hover:bg-ink hover:text-cream"
+      >
+        <span class="text-sm leading-none">+</span> Add
+      </button>
     </div>
-    <p class="mt-1 text-sm leading-relaxed text-ink/55">{{ product.description }}</p>
   </article>
 </template>
 
@@ -44,7 +56,7 @@ const props = defineProps({
   }
 })
 
-// Badge is derived from real inventory in the database.
+// Badge is derived from stock level in data/products.js.
 const badge = computed(() => {
   if (props.product.inStock === false) return 'Sold out'
   if (props.product.lowStock) return `Only ${props.product.stock} left`
