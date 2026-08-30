@@ -1,15 +1,16 @@
 <template>
   <NuxtLink to="/" class="group inline-flex items-center" aria-label="Bahama Mama Swimwear — home">
     <!--
-      Drop the trimmed, transparent-background logo at  public/logo.png
-      (a gold-on-transparent PNG/SVG works on both the cream header and the
-      cocoa footer). Until then, the styled wordmark below is shown.
+      Official logo: public/images/bmlogo.png — top/bottom whitespace trimmed and
+      white background keyed out to transparency (opaque untrimmed original kept
+      at bmlogo-full.png). `h-* w-auto` keeps the trimmed image's proportions.
+      The wordmark is a fallback if the file is missing.
     -->
     <img
       v-if="!imgFailed"
       :src="logoSrc"
       alt="Bahama Mama Swimwear"
-      class="h-11 w-auto md:h-12"
+      class="h-16 w-auto select-none md:h-[4.25rem]"
       @error="imgFailed = true"
     />
 
@@ -34,7 +35,6 @@
 <script setup>
 import { ref } from 'vue'
 
-// Runtime path (not build-time resolved) so a missing file falls back cleanly.
-const logoSrc = '/logo.png'
+const logoSrc = '/images/bmlogo.png'
 const imgFailed = ref(false)
 </script>
