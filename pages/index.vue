@@ -178,15 +178,16 @@
         </div>
 
         <div>
-          <FancyHeading eyebrow="Our Story" title="Born from the *Islands*" />
+          <FancyHeading eyebrow="Our Story" title="For the Love of *Swimwear*" />
           <p class="mt-5 text-lg leading-relaxed text-ink/75">
-            Bahama Mama Swimwear started with a simple belief: every woman deserves
-            swimwear that makes her feel extraordinary.
+            There's a certain feeling that comes with finding a swimsuit you really
+            love. One that fits the way you want it to, feels like you, and makes you
+            excited to put it on. That feeling is a big part of why Bahama Mama exists.
           </p>
           <p class="mt-4 leading-relaxed text-ink/60">
-            Rooted in Caribbean colour and culture, we design pieces that celebrate
-            femininity and confidence — made-to-order in premium, sustainable
-            fabrics because luxury should never cost the planet.
+            Made in Grenada, our swimsuits are for enjoying all the beautiful parts of
+            Caribbean life in. Whether you find one you love or dream up something
+            completely your own, we want it to feel just right on you.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">
             <NuxtLink to="/about" class="btn-outline">Read our story</NuxtLink>
