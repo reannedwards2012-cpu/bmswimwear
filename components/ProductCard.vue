@@ -6,15 +6,8 @@
           :src="product.image"
           :alt="product.title"
           loading="lazy"
-          class="aspect-[4/5] w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+          class="aspect-[3/4] w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
         />
-
-        <span
-          v-if="badge"
-          class="absolute left-4 top-4 rounded-full bg-cream/95 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-widest2 text-coral shadow-sm"
-        >
-          {{ badge }}
-        </span>
 
         <div
           class="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100"
@@ -47,19 +40,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-
-const props = defineProps({
+defineProps({
   product: {
     type: Object,
     required: true
   }
-})
-
-// Badge is derived from stock level in data/products.js.
-const badge = computed(() => {
-  if (props.product.inStock === false) return 'Sold out'
-  if (props.product.lowStock) return `Only ${props.product.stock} left`
-  return ''
 })
 </script>
