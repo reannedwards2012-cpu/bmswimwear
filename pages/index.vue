@@ -62,8 +62,8 @@
         <div class="relative min-h-[420px] overflow-hidden rounded-4xl md:my-16">
           <div class="absolute inset-0 bg-gradient-to-br from-ink via-ocean to-coral" />
           <img
-            src="https://picsum.photos/seed/bahama-custom/900/1100"
-            alt="Swimwear being hand-finished in the studio"
+            src="/images/site/custom.jpg"
+            alt="Bahama Mama swimwear by the palms"
             class="absolute inset-0 h-full w-full object-cover opacity-40 mix-blend-multiply"
           />
           <div class="absolute inset-x-0 bottom-0 p-8">
@@ -160,17 +160,17 @@
     <section id="about" class="section container-bm">
       <div class="grid items-center gap-12 md:grid-cols-2">
         <div class="relative">
-          <div class="aspect-square w-4/5 rounded-4xl bg-gradient-to-br from-ink to-coral shadow-card">
+          <div class="aspect-[3/4] w-4/5 rounded-4xl bg-shell shadow-card">
             <img
-              src="https://picsum.photos/seed/bahama-about-1/800/800"
-              alt="Bahama Mama studio"
-              class="h-full w-full rounded-4xl object-cover opacity-80"
+              src="/images/site/home-story-1.jpg"
+              alt="Bahama Mama at a rum shop in Grenada"
+              class="h-full w-full rounded-4xl object-cover"
             />
           </div>
           <div class="absolute -bottom-8 right-0 aspect-square w-1/2 rounded-4xl bg-blush shadow-soft">
             <img
-              src="https://picsum.photos/seed/bahama-about-2/600/600"
-              alt="Caribbean coast"
+              src="/images/site/home-story-2.jpg"
+              alt="Bahama Mama swimwear on the beach with a fresh coconut"
               class="h-full w-full rounded-4xl object-cover"
             />
           </div>
@@ -331,7 +331,7 @@ const testimonials = [
 ]
 
 const lookbook = Array.from(
-  { length: 10 },
+  { length: 23 },
   (_, i) => `/images/lookbook/${String(i + 1).padStart(2, '0')}.jpg`
 )
 

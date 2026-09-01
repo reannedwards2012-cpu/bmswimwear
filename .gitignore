@@ -11,6 +11,7 @@ dist
 # ship them; the optimised copies under public/images/ are committed)
 product-originals/
 lookbook-originals/
+webphotos-originals/
 
 # local editors
 .vscode

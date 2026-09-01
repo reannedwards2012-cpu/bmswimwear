@@ -30,17 +30,17 @@
         <p>Put it on and feel yourself.</p>
       </div>
       <div class="relative">
-        <div class="aspect-[3/4] w-4/5 rounded-4xl bg-gradient-to-br from-ink to-coral shadow-card">
+        <div class="aspect-[3/4] w-4/5 rounded-4xl bg-shell shadow-card">
           <img
-            src="https://picsum.photos/seed/bahama-story-1/800/1040"
-            alt="Caribbean beach"
-            class="h-full w-full rounded-4xl object-cover opacity-85"
+            src="/images/site/about-1.jpg"
+            alt="Cutting a swimsuit on a dress form in the studio"
+            class="h-full w-full rounded-4xl object-cover"
           />
         </div>
         <div class="absolute -bottom-8 right-0 aspect-square w-1/2 rounded-4xl bg-blush shadow-soft">
           <img
-            src="https://picsum.photos/seed/bahama-story-2/600/600"
-            alt="Studio detail"
+            src="/images/site/about-2.jpg"
+            alt="The founder as a child in a swimsuit"
             class="h-full w-full rounded-4xl object-cover"
           />
         </div>

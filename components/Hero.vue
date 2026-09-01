@@ -26,13 +26,13 @@
       <div class="relative">
         <div class="relative grid grid-cols-2 gap-4">
           <img
-            src="https://picsum.photos/seed/bahama-hero-1/800/1040"
-            alt="Model wearing Bahama Mama swimwear"
+            src="/images/site/hero-1.jpg"
+            alt="Bahama Mama red one-piece on the beach at golden hour"
             class="mt-10 aspect-[3/4] w-full rounded-4xl object-cover shadow-card"
           />
           <img
-            src="https://picsum.photos/seed/bahama-hero-2/800/1040"
-            alt="Caribbean shoreline"
+            src="/images/site/hero-2.jpg"
+            alt="Bahama Mama cut-out one-piece on the beach at sunset"
             class="aspect-[3/4] w-full rounded-4xl object-cover shadow-card"
           />
         </div>
