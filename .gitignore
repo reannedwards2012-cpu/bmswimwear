@@ -7,9 +7,10 @@ dist
 # local database (seeded on startup)
 .data
 
-# full-resolution product photography originals (kept outside public/ so Nuxt
-# doesn't ship them; the optimised copies under public/images/products/ are committed)
+# full-resolution photography originals (kept outside public/ so Nuxt doesn't
+# ship them; the optimised copies under public/images/ are committed)
 product-originals/
+lookbook-originals/
 
 # local editors
 .vscode

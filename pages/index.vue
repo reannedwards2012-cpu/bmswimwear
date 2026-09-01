@@ -142,16 +142,15 @@
 
       <div class="mt-12 flex gap-5 overflow-x-auto scrollbar-hide px-6 pb-4 md:px-10">
         <article
-          v-for="look in lookbook"
-          :key="look.title"
-          class="relative flex aspect-[3/4] w-[76vw] shrink-0 snap-start overflow-hidden rounded-4xl shadow-card sm:w-[46vw] lg:w-[30vw]"
+          v-for="(src, i) in lookbook"
+          :key="i"
+          class="relative aspect-[3/4] w-[76vw] shrink-0 snap-start overflow-hidden rounded-4xl shadow-card sm:w-[46vw] lg:w-[30vw]"
         >
-          <div class="absolute inset-0" :class="look.gradient" />
           <img
-            :src="look.image"
-            :alt="look.title"
+            :src="src"
+            :alt="`Bahama Mama Swimwear lookbook — ${i + 1}`"
             loading="lazy"
-            class="absolute inset-0 h-full w-full object-cover opacity-55 mix-blend-multiply"
+            class="absolute inset-0 h-full w-full object-cover"
           />
         </article>
       </div>
@@ -331,13 +330,10 @@ const testimonials = [
   { name: 'Tanya R.', location: 'Bridgetown, Barbados', quote: 'The custom design experience was so easy and the result? Absolutely stunning. Island luxury at its finest.' }
 ]
 
-const lookbook = [
-  { kicker: 'Bestsellers', title: 'Cocoa Luxe', gradient: 'bg-gradient-to-br from-ink to-ocean', image: 'https://picsum.photos/seed/bahama-look-1/800/1040' },
-  { kicker: 'New In', title: 'Blush Season', gradient: 'bg-gradient-to-br from-blush-deep to-blush', image: 'https://picsum.photos/seed/bahama-look-2/800/1040' },
-  { kicker: 'Golden Hour', title: 'Sun-Kissed', gradient: 'bg-gradient-to-br from-coral to-gold', image: 'https://picsum.photos/seed/bahama-look-3/800/1040' },
-  { kicker: 'Made for You', title: 'The Custom Edit', gradient: 'bg-gradient-to-br from-ocean-deep to-coral', image: 'https://picsum.photos/seed/bahama-look-4/800/1040' },
-  { kicker: 'Resort', title: 'Boardwalk Ready', gradient: 'bg-gradient-to-br from-ink to-blush-deep', image: 'https://picsum.photos/seed/bahama-look-5/800/1040' }
-]
+const lookbook = Array.from(
+  { length: 10 },
+  (_, i) => `/images/lookbook/${String(i + 1).padStart(2, '0')}.jpg`
+)
 
 const socials = [
   {
