@@ -108,7 +108,7 @@
         <figure
           v-for="(t, i) in testimonials"
           :key="t.name"
-          class="rounded-4xl p-8 shadow-card"
+          class="rounded-4xl p-8 shadow-card transition-shadow duration-300 hover:shadow-soft"
           :class="i === 1 ? 'bg-ink text-cream md:-translate-y-4' : 'bg-cream text-ink'"
         >
           <div class="text-coral">★★★★★</div>
@@ -144,13 +144,13 @@
         <article
           v-for="(src, i) in lookbook"
           :key="i"
-          class="relative aspect-[3/4] w-[76vw] shrink-0 snap-start overflow-hidden rounded-4xl shadow-card sm:w-[46vw] lg:w-[30vw]"
+          class="group relative aspect-[3/4] w-[76vw] shrink-0 snap-start overflow-hidden rounded-4xl shadow-card transition-shadow duration-300 hover:shadow-soft sm:w-[46vw] lg:w-[30vw]"
         >
           <img
             :src="src"
             :alt="`Bahama Mama Swimwear lookbook — ${i + 1}`"
             loading="lazy"
-            class="absolute inset-0 h-full w-full object-cover"
+            class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
           />
         </article>
       </div>
@@ -270,15 +270,15 @@
         </form>
 
         <aside class="space-y-4">
-          <div class="rounded-4xl bg-cream p-6 shadow-card">
+          <div class="rounded-4xl bg-cream p-6 shadow-card transition-shadow duration-300 hover:shadow-soft">
             <p class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Visit Us</p>
             <p class="mt-2 text-sm text-ink/70">St. George, Grenada</p>
           </div>
-          <div class="rounded-4xl bg-cream p-6 shadow-card">
+          <div class="rounded-4xl bg-cream p-6 shadow-card transition-shadow duration-300 hover:shadow-soft">
             <p class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Reach Out</p>
             <a href="mailto:hello@bmswimwear.com" class="mt-2 block text-sm text-coral link-underline">hello@bmswimwear.com</a>
           </div>
-          <div class="rounded-4xl bg-cream p-6 shadow-card">
+          <div class="rounded-4xl bg-cream p-6 shadow-card transition-shadow duration-300 hover:shadow-soft">
             <p class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Follow Us</p>
             <div class="mt-3 flex gap-2">
               <a
@@ -294,10 +294,10 @@
               </a>
             </div>
           </div>
-          <div class="rounded-4xl bg-ink p-6 text-cream shadow-card">
+          <div class="rounded-4xl bg-ink p-6 text-cream shadow-card transition-shadow duration-300 hover:shadow-soft">
             <p class="text-xs font-semibold uppercase tracking-widest2 text-blush">Custom Orders</p>
             <p class="mt-2 text-sm text-cream/75">Ready for a custom swimsuit that fits you like a dream?</p>
-            <NuxtLink to="/contact" class="mt-4 inline-block rounded-full border border-cream/30 px-5 py-2 text-xs font-semibold uppercase tracking-widest2 hover:bg-cream hover:text-ink">
+            <NuxtLink to="/contact" class="mt-4 inline-block rounded-full border border-cream/30 px-5 py-2 text-xs font-semibold uppercase tracking-widest2 transition-colors duration-200 hover:bg-cream hover:text-ink">
               Custom order inquiry
             </NuxtLink>
           </div>

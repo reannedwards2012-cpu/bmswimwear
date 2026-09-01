@@ -18,7 +18,7 @@
           :class="
             active === f.value
               ? 'border-ink bg-ink text-cream'
-              : 'border-ink/15 text-ink/60 hover:border-ink/40'
+              : 'border-ink/15 text-ink/60 hover:border-ink/40 hover:text-ink'
           "
           @click="active = f.value"
         >

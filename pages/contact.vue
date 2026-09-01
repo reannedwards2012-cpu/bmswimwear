@@ -47,15 +47,15 @@
       </form>
 
       <aside class="space-y-4">
-        <div class="rounded-4xl bg-cream p-6 shadow-card">
+        <div class="rounded-4xl bg-cream p-6 shadow-card transition-shadow duration-300 hover:shadow-soft">
           <p class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Visit Us</p>
           <p class="mt-2 text-sm text-ink/70">St. George, Grenada</p>
         </div>
-        <div class="rounded-4xl bg-cream p-6 shadow-card">
+        <div class="rounded-4xl bg-cream p-6 shadow-card transition-shadow duration-300 hover:shadow-soft">
           <p class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Reach Out</p>
           <a href="mailto:hello@bmswimwear.com" class="mt-2 block text-sm text-coral link-underline">hello@bmswimwear.com</a>
         </div>
-        <div class="rounded-4xl bg-cream p-6 shadow-card">
+        <div class="rounded-4xl bg-cream p-6 shadow-card transition-shadow duration-300 hover:shadow-soft">
           <p class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Follow Us</p>
           <div class="mt-3 flex gap-2">
             <a
@@ -71,12 +71,12 @@
             </a>
           </div>
         </div>
-        <div class="rounded-4xl bg-ink p-6 text-cream shadow-card">
+        <div class="rounded-4xl bg-ink p-6 text-cream shadow-card transition-shadow duration-300 hover:shadow-soft">
           <p class="text-xs font-semibold uppercase tracking-widest2 text-blush">Made to order</p>
           <p class="mt-2 text-sm text-cream/75">Current turnaround is 2–3 weeks, plus shipping.</p>
           <NuxtLink
             to="/shop"
-            class="mt-4 inline-block rounded-full border border-cream/30 px-5 py-2 text-xs font-semibold uppercase tracking-widest2 hover:bg-cream hover:text-ink"
+            class="mt-4 inline-block rounded-full border border-cream/30 px-5 py-2 text-xs font-semibold uppercase tracking-widest2 transition-colors duration-200 hover:bg-cream hover:text-ink"
           >
             Shop now
           </NuxtLink>

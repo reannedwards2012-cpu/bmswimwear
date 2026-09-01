@@ -1,7 +1,7 @@
 <template>
-  <article class="group">
+  <article class="group transition-transform duration-300 hover:-translate-y-1">
     <NuxtLink :to="`/shop/${product.id}`" class="block">
-      <div class="relative overflow-hidden rounded-4xl bg-shell shadow-card">
+      <div class="relative overflow-hidden rounded-4xl bg-shell shadow-card transition-shadow duration-300 group-hover:shadow-soft">
         <img
           :src="product.image"
           :alt="product.title"
@@ -13,7 +13,7 @@
           class="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100"
         >
           <span
-            class="rounded-full border border-cream/40 bg-ink/20 px-7 py-3 text-xs font-semibold uppercase tracking-widest2 text-cream backdrop-blur-md"
+            class="translate-y-1 rounded-full border border-cream/40 bg-ink/20 px-7 py-3 text-xs font-semibold uppercase tracking-widest2 text-cream backdrop-blur-md transition-transform duration-300 group-hover:translate-y-0"
           >
             View details
           </span>
