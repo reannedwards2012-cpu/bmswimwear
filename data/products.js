@@ -136,7 +136,7 @@ const RAW = [
     details: ['Adjustable fit'],
     sizes: STANDARD_SIZES,
     colours: FULL_RANGE,
-    coverage: [],
+    coverage: COVERAGE_OPTIONS,
     imageCount: 3
   },
   {

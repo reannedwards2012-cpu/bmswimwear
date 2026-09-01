@@ -40,7 +40,7 @@
 
         <div class="mt-4">
           <span class="rounded-full bg-blush/25 px-4 py-1.5 text-base font-semibold text-ink">
-            {{ product.priceFormatted }}
+            USD {{ product.priceFormatted }}
           </span>
           <p class="mt-2 text-xs text-ink/50">Made to order · {{ product.turnaround }}</p>
         </div>

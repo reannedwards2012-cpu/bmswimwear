@@ -2,7 +2,7 @@
   <div class="overflow-hidden">
     <!-- Announcement bar -->
     <div class="bg-ink text-center text-[0.7rem] font-semibold uppercase tracking-widest2 text-cream">
-      <div class="container-bm py-2.5">🌸 Free worldwide shipping over $200 · Made just for you in 2–3 weeks</div>
+      <div class="container-bm py-2.5">All prices in USD. Made for you in {{ MADE_TO_ORDER.turnaround }}</div>
     </div>
 
     <!-- 1 · HERO -->
@@ -310,7 +310,7 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { categories, getProductsByCategory } from '~/data/products.js'
+import { categories, getProductsByCategory, MADE_TO_ORDER } from '~/data/products.js'
 
 const GRID_LIMIT = 12 // 4 columns × 3 rows
 
