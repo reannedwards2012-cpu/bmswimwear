@@ -156,8 +156,8 @@
           </button>
 
           <p v-if="formError" class="text-center text-xs text-coral">{{ formError }}</p>
-          <p v-else-if="devOrder && isDev" class="text-center text-xs text-ink/45">
-            Order {{ devOrder.displayOrderNumber }} created — pending payment (dev only).
+          <p class="text-center text-[0.7rem] text-ink/40">
+            You’ll be taken to Go2Pay to complete payment securely.
           </p>
         </aside>
       </form>
@@ -193,16 +193,14 @@ const {
 
 const turnaround = MADE_TO_ORDER.turnaround
 const money = formatUsd
-const isDev = import.meta.dev
 
 const submitting = ref(false)
 const orderCreated = ref(false)
 const formError = ref('')
-const devOrder = ref(null)
 
 const submitLabel = computed(() => {
-  if (orderCreated.value) return 'Order placed'
-  if (submitting.value) return 'Placing your order…'
+  if (orderCreated.value) return 'Redirecting to payment…'
+  if (submitting.value) return 'Starting payment…'
   return 'Continue to payment'
 })
 
@@ -229,8 +227,7 @@ function pickCountry(value) {
 }
 
 async function onSubmit() {
-  // Guard both the in-flight window and — for this pre-Go2Pay phase — a
-  // second submission after an order was already created for this page state.
+  // Guard the in-flight window and any post-submit re-trigger.
   if (submitting.value || orderCreated.value) return
 
   formError.value = ''
@@ -246,9 +243,19 @@ async function onSubmit() {
       method: 'POST',
       body: buildPayload()
     })
-    devOrder.value = res
-    orderCreated.value = true
-    // Cart is intentionally NOT cleared in this pre-Go2Pay phase.
+
+    if (res?.alreadyPaid) {
+      orderCreated.value = true
+      await navigateTo('/checkout/return')
+      return
+    }
+    if (res?.paymentUrl) {
+      orderCreated.value = true
+      // Do NOT clear the cart — payment isn't confirmed yet.
+      await navigateTo(res.paymentUrl, { external: true })
+      return
+    }
+    formError.value = 'We couldn’t start payment right now. Please try again.'
   } catch (err) {
     formError.value =
       err?.data?.error || 'Something went wrong placing your order. Please try again.'

@@ -15,9 +15,64 @@ export const DELIVERY_METHODS = [
 ]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const CHECKOUT_STORE_KEY = 'bm-checkout'
+
+// Fingerprint of the current cart — the checkout id is regenerated whenever the
+// cart's lines or quantities change, so a stale attempt can't be reused.
+function cartFingerprint(items) {
+  return items
+    .map((i) => `${i.lineId}:${i.quantity}`)
+    .sort()
+    .join('|')
+}
+
+function readStore() {
+  if (typeof sessionStorage === 'undefined') return null
+  try {
+    return JSON.parse(sessionStorage.getItem(CHECKOUT_STORE_KEY) || 'null')
+  } catch {
+    return null
+  }
+}
 
 export function useCheckout() {
   const { items, subtotalUsd } = useCart()
+
+  /**
+   * Stable id for this checkout attempt, persisted per-tab in sessionStorage
+   * and tied to the current cart contents. Lets a return from a failed or
+   * cancelled payment resume the SAME pending order (server-side idempotency)
+   * instead of creating a duplicate.
+   */
+  function checkoutId() {
+    const fp = cartFingerprint(items.value)
+    const stored = readStore()
+    if (stored?.id && stored.fp === fp) return stored.id
+
+    const id =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}` // dev-only fallback
+    try {
+      sessionStorage?.setItem(CHECKOUT_STORE_KEY, JSON.stringify({ id, fp }))
+    } catch {
+      /* storage unavailable — id still valid for this request */
+    }
+    return id
+  }
+
+  /** The stored id without the cart-fingerprint check (for the return page). */
+  function readCheckoutId() {
+    return readStore()?.id || null
+  }
+
+  function clearCheckoutId() {
+    try {
+      sessionStorage?.removeItem(CHECKOUT_STORE_KEY)
+    } catch {
+      /* ignore */
+    }
+  }
 
   const customer = reactive({ firstName: '', lastName: '', email: '', phone: '' })
   const deliveryMethod = ref('') // '' | 'pickup' | 'shipping'
@@ -63,9 +118,10 @@ export function useCheckout() {
     return Object.keys(errors).length === 0
   }
 
-  /** The complete order payload — maps cleanly onto a future Supabase order. */
+  /** The complete order payload sent to POST /api/checkout. */
   function buildPayload() {
     return {
+      checkoutId: checkoutId(),
       customer: {
         firstName: customer.firstName.trim(),
         lastName: customer.lastName.trim(),
@@ -98,6 +154,8 @@ export function useCheckout() {
     needsAddress,
     clearError,
     validate,
-    buildPayload
+    buildPayload,
+    readCheckoutId,
+    clearCheckoutId
   }
 }

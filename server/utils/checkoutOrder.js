@@ -9,6 +9,7 @@
 import { getProductById } from '../../data/products.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const MAX = {
   name: 120,
@@ -36,6 +37,10 @@ const toCents = (dollars) => Math.round(dollars * 100)
 export function buildValidatedOrder(payload) {
   const issues = []
   const p = payload && typeof payload === 'object' ? payload : {}
+
+  // ── checkout attempt id (client-generated, dedupes retries) ──
+  const checkoutId = str(p.checkoutId)
+  if (!UUID_RE.test(checkoutId)) issues.push('This checkout session is invalid — please reload the page.')
 
   // ── customer ──────────────────────────────────────────
   const c = p.customer && typeof p.customer === 'object' ? p.customer : {}
@@ -211,6 +216,7 @@ export function buildValidatedOrder(payload) {
   }
 
   const orderRow = {
+    checkout_idempotency_key: checkoutId,
     first_name: firstName,
     last_name: lastName,
     email,
