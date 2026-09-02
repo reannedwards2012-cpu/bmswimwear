@@ -135,26 +135,7 @@
     </section>
 
     <!-- 5 · LOOKBOOK -->
-    <section class="section bg-shell">
-      <div class="container-bm">
-        <FancyHeading eyebrow="The Lookbook" title="A Taste of *Bahama Mama*" center />
-      </div>
-
-      <div class="mt-12 flex gap-5 overflow-x-auto scrollbar-hide px-6 pb-4 md:px-10">
-        <article
-          v-for="(src, i) in lookbook"
-          :key="i"
-          class="group relative aspect-[3/4] w-[76vw] shrink-0 snap-start overflow-hidden rounded-4xl shadow-card transition-shadow duration-300 hover:shadow-soft sm:w-[46vw] lg:w-[30vw]"
-        >
-          <img
-            :src="src"
-            :alt="`Bahama Mama Swimwear lookbook — ${i + 1}`"
-            loading="lazy"
-            class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-          />
-        </article>
-      </div>
-    </section>
+    <Lookbook />
 
     <!-- 6 · ABOUT (brief) -->
     <section id="about" class="section container-bm">
@@ -329,11 +310,6 @@ const testimonials = [
   { name: 'Serena K.', location: 'Miami, FL', quote: "This is what swimwear should feel like. Premium, beautiful, and uniquely mine. I've ordered three times now!" },
   { name: 'Tanya R.', location: 'Bridgetown, Barbados', quote: 'The custom design experience was so easy and the result? Absolutely stunning. Island luxury at its finest.' }
 ]
-
-const lookbook = Array.from(
-  { length: 23 },
-  (_, i) => `/images/lookbook/${String(i + 1).padStart(2, '0')}.jpg`
-)
 
 const socials = [
   {

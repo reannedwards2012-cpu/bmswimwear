@@ -25,11 +25,15 @@ const props = defineProps({
   eyebrow: { type: String, default: '' },
   center: { type: Boolean, default: false },
   as: { type: String, default: 'h2' },
-  size: { type: String, default: 'md' } // 'md' | 'lg'
+  size: { type: String, default: 'md' } // 'sm' | 'md' | 'lg'
 })
 
-const sizeClass = computed(() =>
-  props.size === 'lg' ? 'text-4xl md:text-6xl' : 'text-3xl md:text-5xl'
+const sizeClass = computed(
+  () =>
+    ({
+      sm: 'text-2xl md:text-4xl',
+      lg: 'text-4xl md:text-6xl'
+    })[props.size] || 'text-3xl md:text-5xl'
 )
 
 const parts = computed(() =>
