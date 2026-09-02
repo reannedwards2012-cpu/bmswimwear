@@ -9,6 +9,7 @@
     "generate": "nuxt build && nuxt start"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.4",
     "nuxt": "^3.8.0"
   },
   "devDependencies": {

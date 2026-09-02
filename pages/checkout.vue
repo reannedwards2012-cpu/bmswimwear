@@ -147,13 +147,17 @@
             </p>
           </div>
 
-          <button type="submit" class="btn-primary w-full shadow-soft" :disabled="submitting">
-            Continue to payment
+          <button
+            type="submit"
+            class="btn-primary w-full shadow-soft disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="submitting || orderCreated"
+          >
+            {{ submitLabel }}
           </button>
 
           <p v-if="formError" class="text-center text-xs text-coral">{{ formError }}</p>
-          <p v-else-if="devConfirmed && isDev" class="text-center text-xs text-ink/45">
-            Checkout payload validated — logged to console (dev only).
+          <p v-else-if="devOrder && isDev" class="text-center text-xs text-ink/45">
+            Order {{ devOrder.displayOrderNumber }} created — pending payment (dev only).
           </p>
         </aside>
       </form>
@@ -166,7 +170,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { MADE_TO_ORDER } from '~/data/products.js'
 import { formatUsd } from '~/utils/money'
 import { COUNTRIES } from '~/utils/countries'
@@ -192,8 +196,15 @@ const money = formatUsd
 const isDev = import.meta.dev
 
 const submitting = ref(false)
+const orderCreated = ref(false)
 const formError = ref('')
-const devConfirmed = ref(false)
+const devOrder = ref(null)
+
+const submitLabel = computed(() => {
+  if (orderCreated.value) return 'Order placed'
+  if (submitting.value) return 'Placing your order…'
+  return 'Continue to payment'
+})
 
 const optionSummary = (item) => [item.size, item.colourName, item.coverage].filter(Boolean).join(' · ')
 
@@ -217,19 +228,32 @@ function pickCountry(value) {
   clearError('country')
 }
 
-function onSubmit() {
+async function onSubmit() {
+  // Guard both the in-flight window and — for this pre-Go2Pay phase — a
+  // second submission after an order was already created for this page state.
+  if (submitting.value || orderCreated.value) return
+
   formError.value = ''
-  devConfirmed.value = false
 
   if (!validate()) {
     formError.value = 'Please complete the highlighted fields.'
     return
   }
 
-  const payload = buildPayload()
-  // No backend yet — shape and hand-off point only. A future server checkout
-  // action will replace this block: POST payload -> pending order -> Go2Pay.
-  if (isDev) console.log('[checkout] payload ready', payload)
-  devConfirmed.value = true
+  submitting.value = true
+  try {
+    const res = await $fetch('/api/checkout', {
+      method: 'POST',
+      body: buildPayload()
+    })
+    devOrder.value = res
+    orderCreated.value = true
+    // Cart is intentionally NOT cleared in this pre-Go2Pay phase.
+  } catch (err) {
+    formError.value =
+      err?.data?.error || 'Something went wrong placing your order. Please try again.'
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
