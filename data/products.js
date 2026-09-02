@@ -263,6 +263,28 @@ const RAW = [
     colours: [],
     coverage: [],
     imageCount: 2
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // TEMPORARY — Go2Pay payment-flow test product. Added 2026-09-02.
+  // REMOVE this record AND public/images/products/test-product/ once payment
+  // testing is done. No size/colour/coverage options so it can be added to
+  // cart and checked out with zero selections (still valid: server option
+  // checks only apply when the product defines those options). Authoritative
+  // price = 200 USD cents / 540 XCD cents.
+  // ═══════════════════════════════════════════════════════════════════════
+  {
+    id: 'test-product',
+    title: 'Test Product',
+    category: 'tops',
+    priceUsdCents: 200,
+    priceXcdCents: 540,
+    description: 'Temporary product for payment testing.',
+    details: [],
+    sizes: [],
+    colours: [],
+    coverage: [],
+    imageCount: 1
   }
 ]
 
