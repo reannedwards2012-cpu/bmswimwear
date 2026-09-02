@@ -28,13 +28,13 @@
 
     <div class="mt-1.5 flex items-center justify-between gap-3">
       <p class="text-base font-semibold text-coral">{{ product.priceFormatted }}</p>
-      <button
-        type="button"
-        aria-label="Add to bag"
+      <NuxtLink
+        :to="`/shop/${product.id}`"
+        aria-label="Choose options"
         class="inline-flex items-center gap-1.5 rounded-full border border-ink/25 px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-widest2 text-ink/70 transition-colors hover:border-ink hover:bg-ink hover:text-cream"
       >
         <span class="text-sm leading-none">+</span> Add
-      </button>
+      </NuxtLink>
     </div>
   </article>
 </template>

@@ -19,18 +19,24 @@
       </nav>
 
       <div class="flex items-center gap-2">
-        <!-- Visual only — no cart/checkout yet -->
-        <span
-          class="relative grid h-10 w-10 place-items-center rounded-full text-ink/80"
-          aria-label="Shopping bag (coming soon)"
-          title="Bag — coming soon"
+        <NuxtLink
+          to="/cart"
+          class="relative grid h-10 w-10 place-items-center rounded-full text-ink/80 transition-colors hover:text-ink"
+          aria-label="Cart"
         >
           <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M6 8h12l1 12H5L6 8Z" stroke-linejoin="round" />
             <path d="M9 8V6a3 3 0 0 1 6 0v2" stroke-linecap="round" />
           </svg>
-          <span class="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-shell text-[0.6rem] font-bold text-ink/60">0</span>
-        </span>
+          <ClientOnly>
+            <span
+              v-if="totalUnits > 0"
+              class="absolute -right-0.5 -top-0.5 grid h-4 w-4 min-w-[1rem] place-items-center rounded-full bg-coral px-1 text-[0.6rem] font-bold text-white"
+            >
+              {{ totalUnits }}
+            </span>
+          </ClientOnly>
+        </NuxtLink>
 
         <button
           class="grid h-10 w-10 place-items-center rounded-full text-ink md:hidden"
@@ -82,6 +88,8 @@ const links = [
   { label: 'About', to: '/about' },
   { label: 'Contact', to: '/contact' }
 ]
+
+const { totalUnits } = useCart()
 
 const open = ref(false)
 const scrolled = ref(false)

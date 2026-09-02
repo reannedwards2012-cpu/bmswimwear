@@ -48,69 +48,51 @@
         <p v-if="product.description" class="mt-6 leading-relaxed text-ink/70">{{ product.description }}</p>
 
         <!-- colour -->
-        <div v-if="product.colours.length" class="mt-8">
-          <p class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Colour</p>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <span
-              v-for="c in product.colours"
-              :key="c.id"
-              class="flex items-center gap-2 rounded-full border border-ink/15 px-3 py-1.5 text-sm text-ink/70"
-            >
-              <span class="h-4 w-4 rounded-full border border-ink/10" :style="{ backgroundColor: c.hex }" />
-              {{ c.name }}
-            </span>
-          </div>
-        </div>
+        <ProductOptionGroup
+          v-if="product.colours.length"
+          v-model="selectedColour"
+          label="Colour"
+          type="colour"
+          :options="product.colours"
+          :invalid="showErrors && missingOptions.includes('colour')"
+          class="mt-8"
+        />
 
         <!-- coverage -->
-        <div v-if="product.coverage.length" class="mt-8">
-          <p class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Coverage</p>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button
-              v-for="cov in product.coverage"
-              :key="cov"
-              type="button"
-              class="rounded-full border px-4 py-2 text-sm font-medium transition-colors"
-              :class="
-                selectedCoverage === cov
-                  ? 'border-ink bg-ink text-cream'
-                  : 'border-ink/15 text-ink/70 hover:border-ink/40'
-              "
-              @click="selectedCoverage = cov"
-            >
-              {{ cov }}
-            </button>
-          </div>
-        </div>
+        <ProductOptionGroup
+          v-if="product.coverage.length"
+          v-model="selectedCoverage"
+          label="Coverage"
+          :options="product.coverage"
+          :invalid="showErrors && missingOptions.includes('coverage')"
+          class="mt-8"
+        />
 
         <!-- size -->
-        <div v-if="product.sizes.length" class="mt-8">
-          <p class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Size</p>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button
-              v-for="s in product.sizes"
-              :key="s"
-              type="button"
-              class="min-w-[3rem] rounded-full border px-4 py-2 text-sm font-medium transition-colors"
-              :class="
-                selectedSize === s
-                  ? 'border-ink bg-ink text-cream'
-                  : 'border-ink/15 text-ink/70 hover:border-ink/40'
-              "
-              @click="selectedSize = s"
-            >
-              {{ s }}
-            </button>
-          </div>
-        </div>
+        <ProductOptionGroup
+          v-if="product.sizes.length"
+          v-model="selectedSize"
+          label="Size"
+          :options="product.sizes"
+          :invalid="showErrors && missingOptions.includes('size')"
+          class="mt-8"
+        />
 
-        <!-- add to cart (visual only for now) -->
+        <!-- add to cart -->
         <button
           type="button"
           class="btn-primary mt-8 w-full shadow-soft sm:w-auto sm:min-w-[16rem]"
+          @click="onAddToCart"
         >
           Add to cart
         </button>
+
+        <p
+          v-if="showErrors && missingOptions.length"
+          class="mt-3 text-sm text-coral"
+        >
+          Please choose {{ missingLabel }} before adding to cart.
+        </p>
 
         <!-- details -->
         <div v-if="product.details.length" class="mt-10 border-t border-ink/10 pt-6">
@@ -159,8 +141,55 @@ useHead({ title: `${product.title} — Bahama Mama Swimwear` })
 const activeIndex = ref(0)
 const activeImage = computed(() => product.images[activeIndex.value] ?? product.image)
 
+// No option is pre-selected — the customer makes an intentional choice.
+// `selectedColour` stores the fabric id (e.g. 'royal-blue'), not the display
+// name, so it maps straight onto the shared fabric inventory later.
+const selectedColour = ref(null)
 const selectedSize = ref(null)
 const selectedCoverage = ref(null)
+
+// Which options this specific product actually offers → which are required.
+const requiredOptions = computed(() => {
+  const r = []
+  if (product.colours.length) r.push('colour')
+  if (product.coverage.length) r.push('coverage')
+  if (product.sizes.length) r.push('size')
+  return r
+})
+const missingOptions = computed(() =>
+  requiredOptions.value.filter((opt) => {
+    if (opt === 'colour') return !selectedColour.value
+    if (opt === 'coverage') return !selectedCoverage.value
+    return !selectedSize.value
+  })
+)
+const missingLabel = computed(() => {
+  const names = { colour: 'a colour', coverage: 'a coverage', size: 'a size' }
+  const list = missingOptions.value.map((o) => names[o])
+  if (list.length <= 1) return list[0] ?? ''
+  return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`
+})
+
+const { addItem, openDrawer } = useCart()
+const showErrors = ref(false)
+
+function onAddToCart() {
+  if (missingOptions.value.length) {
+    showErrors.value = true
+    return
+  }
+
+  const colour = product.colours.find((c) => c.id === selectedColour.value)
+  addItem(product, {
+    size: selectedSize.value,
+    colourId: colour?.id ?? null,
+    colourName: colour?.name ?? null,
+    coverage: selectedCoverage.value
+  })
+
+  showErrors.value = false
+  openDrawer()
+}
 
 const related = computed(() => getRelatedProducts(product, 3))
 </script>

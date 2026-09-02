@@ -5,5 +5,8 @@
       <slot />
     </main>
     <Footer />
+    <ClientOnly>
+      <CartDrawer />
+    </ClientOnly>
   </div>
 </template>
