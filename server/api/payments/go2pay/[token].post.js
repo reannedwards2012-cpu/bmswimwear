@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
-import { getOrder } from '../../../utils/go2pay.js'
+import { verifyAndMarkPaid } from '../../../utils/go2payVerify.js'
 
 /**
  * POST /api/payments/go2pay/[token]
@@ -27,14 +27,20 @@ import { getOrder } from '../../../utils/go2pay.js'
  */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const CLOCK_TOLERANCE_MS = 5 * 60 * 1000
 
 const norm = (v) => (typeof v === 'string' ? v.trim() : '')
 const upper = (v) => norm(v).toUpperCase()
-const lower = (v) => norm(v).toLowerCase()
-const toCents = (v) => {
-  const n = Number(v)
-  return Number.isFinite(n) ? Math.round(n * 100) : NaN
+
+// verify-outcome → { HTTP status, `received` value, diagnostic label }
+const OUTCOME_MAP = {
+  'already-paid': { http: 200, received: true, label: 'noop:already-paid' },
+  'bound-to-different-go2pay-order': { http: 200, received: true, label: 'rejected:bound-to-different-go2pay-order' },
+  'get-orders-failed': { http: 502, received: false, label: 'error:get-orders-failed' },
+  'verification-failed': { http: 200, received: true, label: 'rejected:verification-failed' },
+  'mark-paid-failed': { http: 500, received: false, label: 'error:mark-paid-failed' },
+  'unique-violation-already-final': { http: 200, received: true, label: 'noop:unique-violation-already-final' },
+  'marked-paid': { http: 200, received: true, label: 'success:marked-paid' },
+  'no-longer-pending': { http: 200, received: true, label: 'noop:no-longer-pending' }
 }
 
 /**
@@ -133,131 +139,32 @@ export default defineEventHandler(async (event) => {
       return { received: false }
     }
 
-    if (order.status === 'paid') {
-      diag('noop:already-paid', { orderId: order.id })
-      return { received: true }
-    }
-
-    if (order.go2pay_order_id != null && String(order.go2pay_order_id) !== String(cbOrderId)) {
-      diag('rejected:bound-to-different-go2pay-order', {
-        orderId: order.id,
-        cbOrderId,
-        boundOrderId: order.go2pay_order_id
-      })
-      return { received: true }
-    }
-
-    if (cbStatus !== 'PAID') {
+    // Callback-only shortcut: a non-PAID callback has nothing to verify.
+    if (order.status !== 'paid' && cbStatus !== 'PAID') {
       diag('noop:callback-status-not-paid', { orderId: order.id, cbStatus })
       return { received: true }
     }
 
-    // ── Independent verification via Go2Pay Orders API (UNCHANGED) ──
-    const lookup = await getOrder(cbOrderId)
-    const orderKeys =
-      lookup.data && typeof lookup.data === 'object' ? Object.keys(lookup.data) : []
+    // ── Shared verification + mark-paid (server/utils/go2payVerify.js) ──
+    const r = await verifyAndMarkPaid(supabase, order, cbOrderId)
+    const m = OUTCOME_MAP[r.outcome] || { http: 500, received: false, label: 'error:unknown-outcome' }
 
-    if (!lookup.ok || !lookup.data) {
-      diag('error:get-orders-failed', {
-        orderId: order.id,
-        cbOrderId,
-        getOrderHttp: lookup.status,
-        callbackKeys: bodyKeys
-      })
-      setResponseStatus(event, 502)
-      return { received: false }
-    }
-
-    const g = lookup.data
-    const gAmountCents = toCents(g.subtotal ?? g.price)
-    const gPaymentId = norm(g.payment_id) || norm(payload?.payment_id) || null
-    const gTimestamp = g.paid_at ?? g.created ?? g.created_at ?? null
-
-    // Diagnostic only — the payer can enter a different billing email on Go2Pay's
-    // hosted screen, so this is NOT a payment-authenticity condition and the
-    // Bahama Mama order email is never overwritten.
-    const emailMatchDiag = !!lower(g.email) && lower(g.email) === lower(order.email)
-
-    // Go2Pay stores our Payment Request id in the ORDER's `product_id` field for
-    // request-originated orders (confirmed live 2026-09-03; the order's own
-    // `request_id` is empty ""). This is the direct Supabase order → Payment
-    // Request → Go2Pay order linkage. MANDATORY — fail closed if either side
-    // is missing.
-    const gLinkId = g.product_id ?? null
-    const requestLinkOk =
-      gLinkId != null &&
-      order.go2pay_request_id != null &&
-      String(gLinkId) === String(order.go2pay_request_id)
-
-    const checks = {
-      status: upper(g.status) === 'PAID',
-      currency: upper(g.currency) === 'USD',
-      amount: Number.isFinite(gAmountCents) && gAmountCents === order.subtotal_usd_cents,
-      requestLink: requestLinkOk,
-      paymentId: !!gPaymentId
-    }
-
-    if (gTimestamp) {
-      const ts = Date.parse(gTimestamp)
-      const localTs = Date.parse(order.created_at)
-      checks.timestamp =
-        !Number.isFinite(ts) || !Number.isFinite(localTs) ? true : ts >= localTs - CLOCK_TOLERANCE_MS
-    }
-
-    const failed = Object.entries(checks)
-      .filter(([, ok]) => !ok)
-      .map(([k]) => k)
-
-    if (failed.length > 0) {
-      diag('rejected:verification-failed', {
-        orderId: order.id,
-        cbOrderId,
-        failedChecks: failed,
-        emailMatch: emailMatchDiag,
-        // Provider/order identifiers (not PII/credentials) — the two sides of
-        // the linkage check, to diagnose any future requestLink mismatch.
-        savedRequestId: order.go2pay_request_id,
-        go2payOrderProductId: gLinkId,
-        callbackKeys: bodyKeys,
-        orderKeys
-      })
-      return { received: true } // acknowledge; do NOT mark paid
-    }
-
-    // ── Mark paid: idempotent, first-write-wins on status ──
-    const updated = await supabase
-      .from('orders')
-      .update({
-        status: 'paid',
-        payment_provider: 'go2pay',
-        go2pay_order_id: cbOrderId,
-        payment_id: gPaymentId,
-        paid_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', order.id)
-      .eq('status', 'pending')
-      .select('id')
-      .maybeSingle()
-
-    if (updated.error) {
-      if (updated.error.code === '23505') {
-        diag('noop:unique-violation-already-final', { orderId: order.id })
-        return { received: true }
-      }
-      diag('error:mark-paid-failed', { orderId: order.id, supabaseError: updated.error.message })
-      setResponseStatus(event, 500)
-      return { received: false }
-    }
-
-    diag(updated.data ? 'success:marked-paid' : 'noop:no-longer-pending', {
+    diag(m.label, {
       orderId: order.id,
       cbOrderId,
-      emailMatch: emailMatchDiag,
+      ...(r.failedChecks ? { failedChecks: r.failedChecks } : {}),
+      ...(r.emailMatch != null ? { emailMatch: r.emailMatch } : {}),
+      ...(r.savedRequestId != null ? { savedRequestId: r.savedRequestId } : {}),
+      ...(r.go2payOrderProductId != null ? { go2payOrderProductId: r.go2payOrderProductId } : {}),
+      ...(r.getOrderHttp != null ? { getOrderHttp: r.getOrderHttp } : {}),
+      ...(r.boundOrderId != null ? { boundOrderId: r.boundOrderId } : {}),
+      ...(r.supabaseError ? { supabaseError: r.supabaseError } : {}),
       callbackKeys: bodyKeys,
-      orderKeys
+      ...(r.go2pay?.orderKeys ? { orderKeys: r.go2pay.orderKeys } : {})
     })
-    return { received: true }
+
+    if (m.http !== 200) setResponseStatus(event, m.http)
+    return { received: m.received }
   } catch (err) {
     diag('error:unexpected', { message: err?.message })
     setResponseStatus(event, 500)
