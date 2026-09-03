@@ -2,8 +2,8 @@
  * The single source of truth for "is this Go2Pay order a valid payment for this
  * Bahama Mama order — and if so, mark it paid."
  *
- * Used by BOTH the live callback (server/api/payments/go2pay/[token].post.js)
- * and the temporary reconcile endpoint, so they cannot drift.
+ * Used by the live callback (server/api/payments/go2pay/[token].post.js). A
+ * one-off reconcile endpoint also used it (removed after Order 28531).
  *
  * Read / verify / update only — never creates a Go2Pay Payment Request.
  * Returns a SAFE result object: order/provider IDs and booleans only — no
