@@ -1,6 +1,6 @@
 import { buildValidatedOrder } from '../utils/checkoutOrder.js'
 import { supabaseAdmin } from '../utils/supabaseAdmin.js'
-import { createPaymentRequest } from '../utils/go2pay.js'
+import { createPaymentRequest, getPaymentRequest } from '../utils/go2pay.js'
 import { siteUrl } from '../utils/siteUrl.js'
 
 const GENERIC_ERROR = 'We couldn’t place your order right now. Please try again.'
@@ -9,20 +9,38 @@ const PAYMENT_INIT_ERROR = 'We couldn’t start payment right now. Please try ag
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const displayNumber = (orderNumber) => `BM-${String(orderNumber).padStart(6, '0')}`
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Run a guarded Supabase UPDATE, retrying ONLY on a transient error (never on a
+ * 0-rows-matched result — that means the guard legitimately didn't apply).
+ * 3 attempts, ~200ms then ~400ms backoff.
+ */
+async function updateWithRetry(build) {
+  const backoff = [200, 400]
+  let res
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = await build()
+    if (!res.error) return res
+    if (attempt < backoff.length) await sleep(backoff[attempt])
+  }
+  return res
+}
 
 /**
  * POST /api/checkout
  *
  * Validate cart server-side → create (or reuse) a pending Supabase order + items
- * → create a Go2Pay Payment Request → persist the request info → return the
- * hosted payment URL. Status stays 'pending' until the Go2Pay callback
- * independently verifies payment.
+ * → resolve the order's Go2Pay Payment Request → return the hosted payment URL.
+ * Status stays 'pending' until the Go2Pay callback independently verifies.
  *
- * Retry-safe: a repeat call with the same client `checkoutId` resumes the same
- * pending order instead of creating a new one (see the idempotency lookup).
+ * Persistence invariant: a `paymentUrl` is returned ONLY after both
+ * `go2pay_request_id` and `go2pay_payment_url` are confirmed persisted. A
+ * non-null `go2pay_request_id` is never overwritten. A saved request is always
+ * reused (state 1) or recovered (state 2) — never replaced.
  *
- * Never trusts client money/names/images (checkoutOrder.js). Never returns raw
- * Supabase/Go2Pay errors, credentials, tokens or callback tokens.
+ * Never trusts client money/names/images. Never returns raw Supabase/Go2Pay
+ * errors, credentials, tokens or callback tokens.
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody(event).catch(() => null)
@@ -33,16 +51,19 @@ export default defineEventHandler(async (event) => {
     return { success: false, error: result.error, issues: result.issues }
   }
 
-  const { orderRow, itemRows, subtotalUsdCents } = result
+  const { orderRow, itemRows } = result
   const checkoutId = orderRow.checkout_idempotency_key
+
+  const ORDER_COLS =
+    'id, order_number, status, first_name, last_name, email, phone, subtotal_usd_cents, payment_callback_token, go2pay_request_id, go2pay_payment_url'
 
   try {
     const supabase = supabaseAdmin()
 
-    // ── 1. Idempotency: is there already an order for this checkout attempt? ──
+    // ── 1. Idempotency: existing order for this checkout attempt? ──
     const existing = await supabase
       .from('orders')
-      .select('id, order_number, status, first_name, last_name, email, phone, subtotal_usd_cents, payment_callback_token, go2pay_payment_url')
+      .select(ORDER_COLS)
       .eq('checkout_idempotency_key', checkoutId)
       .maybeSingle()
 
@@ -54,36 +75,18 @@ export default defineEventHandler(async (event) => {
 
     let order = existing.data
 
-    if (order) {
-      if (order.status === 'paid') {
-        return { success: true, alreadyPaid: true, displayOrderNumber: displayNumber(order.order_number) }
-      }
-      if (order.go2pay_payment_url) {
-        return { success: true, paymentUrl: order.go2pay_payment_url, displayOrderNumber: displayNumber(order.order_number) }
-      }
-      // Order exists but the Go2Pay step never completed — fall through and retry it.
-    } else {
-      // ── 2. Create the pending order + items (first attempt) ──
-      const inserted = await supabase
-        .from('orders')
-        .insert(orderRow)
-        .select('id, order_number, first_name, last_name, email, phone, subtotal_usd_cents, payment_callback_token')
-        .single()
+    // ── 2. Create the pending order + items (first attempt only) ──
+    if (!order) {
+      const inserted = await supabase.from('orders').insert(orderRow).select(ORDER_COLS).single()
 
       if (inserted.error || !inserted.data) {
-        // Concurrent request won the race on the unique idempotency key.
         if (inserted.error?.code === '23505') {
+          // Concurrent request won the unique idempotency-key race.
           const raced = await supabase
             .from('orders')
-            .select('id, order_number, status, first_name, last_name, email, phone, subtotal_usd_cents, payment_callback_token, go2pay_payment_url')
+            .select(ORDER_COLS)
             .eq('checkout_idempotency_key', checkoutId)
             .maybeSingle()
-          if (raced.data?.status === 'paid') {
-            return { success: true, alreadyPaid: true, displayOrderNumber: displayNumber(raced.data.order_number) }
-          }
-          if (raced.data?.go2pay_payment_url) {
-            return { success: true, paymentUrl: raced.data.go2pay_payment_url, displayOrderNumber: displayNumber(raced.data.order_number) }
-          }
           order = raced.data
         }
         if (!order) {
@@ -99,7 +102,6 @@ export default defineEventHandler(async (event) => {
           .insert(itemRows.map((row) => ({ ...row, order_id: order.id })))
 
         if (items.error) {
-          // Avoid an orphan order (order_items.order_id is ON DELETE CASCADE).
           console.error('[checkout] order_items insert failed — rolling back order', order.id, items.error.message)
           await supabase.from('orders').delete().eq('id', order.id)
           setResponseStatus(event, 500)
@@ -108,8 +110,73 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // ── 3. Create the Go2Pay Payment Request (documented fields only) ──
+    // ── 3. Resolve the Go2Pay Payment Request for this order ──
     const displayOrderNumber = displayNumber(order.order_number)
+    const savedRequestId = order.go2pay_request_id ?? null
+    const savedUrl = order.go2pay_payment_url ?? null
+
+    if (order.status === 'paid') {
+      return { success: true, alreadyPaid: true, displayOrderNumber }
+    }
+
+    // STATE 1 — request id + url both persisted → reuse, never re-mint.
+    if (savedUrl) {
+      if (!savedRequestId) {
+        console.error('[checkout] anomaly: payment_url without request_id', JSON.stringify({ orderId: order.id }))
+      }
+      return { success: true, paymentUrl: savedUrl, displayOrderNumber }
+    }
+
+    // STATE 2 — request claimed but url missing → recover it, never re-mint.
+    if (savedRequestId) {
+      const reqLookup = await getPaymentRequest(savedRequestId)
+      const recoveredUrl =
+        reqLookup.ok && reqLookup.data && typeof reqLookup.data.payment_url === 'string'
+          ? reqLookup.data.payment_url
+          : null
+
+      if (!recoveredUrl) {
+        console.error(
+          '[checkout] state2: payment_url not recoverable',
+          JSON.stringify({ orderId: order.id, go2payRequestId: savedRequestId, http: reqLookup.status })
+        )
+        setResponseStatus(event, 502)
+        return { success: false, error: PAYMENT_INIT_ERROR }
+      }
+
+      const fin = await updateWithRetry(() =>
+        supabase
+          .from('orders')
+          .update({ go2pay_payment_url: recoveredUrl, payment_provider: 'go2pay' })
+          .eq('id', order.id)
+          .eq('status', 'pending')
+          .eq('go2pay_request_id', savedRequestId)
+          .is('go2pay_payment_url', null)
+          .select('id')
+      )
+
+      if (fin.error || !fin.data?.length) {
+        const re = await supabase
+          .from('orders')
+          .select('status, go2pay_payment_url')
+          .eq('id', order.id)
+          .maybeSingle()
+        if (re.data?.status === 'paid') return { success: true, alreadyPaid: true, displayOrderNumber }
+        if (re.data?.go2pay_payment_url) {
+          return { success: true, paymentUrl: re.data.go2pay_payment_url, displayOrderNumber }
+        }
+        console.error(
+          '[checkout] state2: finalize failed',
+          JSON.stringify({ orderId: order.id, err: fin.error?.message ?? '0-rows' })
+        )
+        setResponseStatus(event, 502)
+        return { success: false, error: PAYMENT_INIT_ERROR }
+      }
+
+      return { success: true, paymentUrl: recoveredUrl, displayOrderNumber }
+    }
+
+    // STATE 3 — nothing persisted → create exactly one request, CLAIM, FINALIZE.
     let base
     try {
       base = siteUrl()
@@ -119,15 +186,9 @@ export default defineEventHandler(async (event) => {
       return { success: false, error: PAYMENT_INIT_ERROR }
     }
 
-    // Go2Pay renders the Payment Request `name` as the PURCHASE / ITEM name on
-    // the hosted page and receipt (confirmed live — not the payer's name). Use
-    // the authoritative server-side product name for a single-line order, or the
-    // order reference for a multi-line order. Never a client-submitted name.
     const requestName =
       itemRows.length === 1 ? itemRows[0].product_name : `Bahama Mama Order ${displayOrderNumber}`
 
-    // Diagnostic (D): confirm the callback URL we're about to send — origin +
-    // path template + token-format only. Never the token value or full URL.
     console.log(
       '[checkout] Go2Pay request —',
       JSON.stringify({
@@ -154,15 +215,11 @@ export default defineEventHandler(async (event) => {
         send_email: false
       })
     } catch (err) {
-      // Order stays 'pending' with no payment URL; a retry with the same
-      // checkoutId re-enters here without creating a new order.
       console.error('[checkout] Go2Pay create-request failed for order', order.id, '—', err.message)
       setResponseStatus(event, 502)
       return { success: false, error: PAYMENT_INIT_ERROR }
     }
 
-    // Diagnostic (Issue 1 + name/title): what we sent vs what Go2Pay echoes.
-    // Safe fields only — ids, product/order name, booleans. No customer data / URL.
     console.log(
       '[checkout] Go2Pay request created —',
       JSON.stringify({
@@ -174,22 +231,70 @@ export default defineEventHandler(async (event) => {
       })
     )
 
-    // ── 4. Persist the Go2Pay request info; status remains 'pending' ──
-    const saved = await supabase
-      .from('orders')
-      .update({
-        go2pay_request_id: go2pay.id,
-        go2pay_payment_url: go2pay.payment_url,
-        payment_provider: 'go2pay'
-      })
-      .eq('id', order.id)
-      .eq('status', 'pending')
+    // CLAIM — `is('go2pay_request_id', null)` guarantees a non-null id is never overwritten.
+    const claim = await updateWithRetry(() =>
+      supabase
+        .from('orders')
+        .update({ go2pay_request_id: go2pay.id, payment_provider: 'go2pay' })
+        .eq('id', order.id)
+        .eq('status', 'pending')
+        .is('go2pay_request_id', null)
+        .select('id')
+    )
 
-    if (saved.error) {
-      // The request exists at Go2Pay but we failed to record it. The customer
-      // can still pay (URL returned below); the callback reconciles via the
-      // per-order callback token. Logged for manual follow-up.
-      console.error('[checkout] failed to persist Go2Pay request for order', order.id, '—', saved.error.message)
+    if (claim.error || !claim.data?.length) {
+      // The Go2Pay request we just created could not be recorded → orphan.
+      console.error(
+        '[checkout] CLAIM failed — orphan Go2Pay request',
+        JSON.stringify({
+          orderId: order.id,
+          go2payRequestId: go2pay.id,
+          reason: claim.error ? claim.error.message : '0-rows (concurrent claim or state change)'
+        })
+      )
+      const re = await supabase
+        .from('orders')
+        .select('status, go2pay_payment_url')
+        .eq('id', order.id)
+        .maybeSingle()
+      if (re.data?.status === 'paid') return { success: true, alreadyPaid: true, displayOrderNumber }
+      if (re.data?.go2pay_payment_url) {
+        return { success: true, paymentUrl: re.data.go2pay_payment_url, displayOrderNumber }
+      }
+      setResponseStatus(event, 502)
+      return { success: false, error: PAYMENT_INIT_ERROR }
+    }
+
+    // FINALIZE — persist the URL for the request we just claimed.
+    const fin = await updateWithRetry(() =>
+      supabase
+        .from('orders')
+        .update({ go2pay_payment_url: go2pay.payment_url })
+        .eq('id', order.id)
+        .eq('status', 'pending')
+        .eq('go2pay_request_id', go2pay.id)
+        .is('go2pay_payment_url', null)
+        .select('id')
+    )
+
+    if (fin.error || !fin.data?.length) {
+      const re = await supabase
+        .from('orders')
+        .select('status, go2pay_payment_url')
+        .eq('id', order.id)
+        .maybeSingle()
+      if (re.data?.status === 'paid') return { success: true, alreadyPaid: true, displayOrderNumber }
+      if (re.data?.go2pay_payment_url) {
+        return { success: true, paymentUrl: re.data.go2pay_payment_url, displayOrderNumber }
+      }
+      // request_id is saved, url is not → order is recoverable via STATE 2 on the
+      // next retry. Do NOT expose this URL.
+      console.error(
+        '[checkout] FINALIZE failed — order left recoverable (state 2)',
+        JSON.stringify({ orderId: order.id, go2payRequestId: go2pay.id, err: fin.error?.message ?? '0-rows' })
+      )
+      setResponseStatus(event, 502)
+      return { success: false, error: PAYMENT_INIT_ERROR }
     }
 
     return { success: true, paymentUrl: go2pay.payment_url, displayOrderNumber }

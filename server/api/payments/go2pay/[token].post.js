@@ -178,10 +178,22 @@ export default defineEventHandler(async (event) => {
     // Bahama Mama order email is never overwritten.
     const emailMatchDiag = !!lower(g.email) && lower(g.email) === lower(order.email)
 
+    // Go2Pay stores our Payment Request id in the ORDER's `product_id` field for
+    // request-originated orders (confirmed live 2026-09-03; the order's own
+    // `request_id` is empty ""). This is the direct Supabase order → Payment
+    // Request → Go2Pay order linkage. MANDATORY — fail closed if either side
+    // is missing.
+    const gLinkId = g.product_id ?? null
+    const requestLinkOk =
+      gLinkId != null &&
+      order.go2pay_request_id != null &&
+      String(gLinkId) === String(order.go2pay_request_id)
+
     const checks = {
       status: upper(g.status) === 'PAID',
       currency: upper(g.currency) === 'USD',
       amount: Number.isFinite(gAmountCents) && gAmountCents === order.subtotal_usd_cents,
+      requestLink: requestLinkOk,
       paymentId: !!gPaymentId
     }
 
@@ -190,11 +202,6 @@ export default defineEventHandler(async (event) => {
       const localTs = Date.parse(order.created_at)
       checks.timestamp =
         !Number.isFinite(ts) || !Number.isFinite(localTs) ? true : ts >= localTs - CLOCK_TOLERANCE_MS
-    }
-
-    const gRequestId = g.request_id ?? g.payment_request_id ?? null
-    if (gRequestId != null && order.go2pay_request_id != null) {
-      checks.requestLink = String(gRequestId) === String(order.go2pay_request_id)
     }
 
     const failed = Object.entries(checks)
@@ -207,11 +214,10 @@ export default defineEventHandler(async (event) => {
         cbOrderId,
         failedChecks: failed,
         emailMatch: emailMatchDiag,
-        // Provider/order identifiers (not PII/credentials) — temporary, to
-        // diagnose the request_id linkage. Trim once requestLink is settled.
+        // Provider/order identifiers (not PII/credentials) — the two sides of
+        // the linkage check, to diagnose any future requestLink mismatch.
         savedRequestId: order.go2pay_request_id,
-        go2payOrderRequestId: gRequestId,
-        cbApiOrderId: payload?.api_order_id ?? null,
+        go2payOrderProductId: gLinkId,
         callbackKeys: bodyKeys,
         orderKeys
       })
