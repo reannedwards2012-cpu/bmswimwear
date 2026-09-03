@@ -173,11 +173,15 @@ export default defineEventHandler(async (event) => {
     const gPaymentId = norm(g.payment_id) || norm(payload?.payment_id) || null
     const gTimestamp = g.paid_at ?? g.created ?? g.created_at ?? null
 
+    // Diagnostic only — the payer can enter a different billing email on Go2Pay's
+    // hosted screen, so this is NOT a payment-authenticity condition and the
+    // Bahama Mama order email is never overwritten.
+    const emailMatchDiag = !!lower(g.email) && lower(g.email) === lower(order.email)
+
     const checks = {
       status: upper(g.status) === 'PAID',
       currency: upper(g.currency) === 'USD',
       amount: Number.isFinite(gAmountCents) && gAmountCents === order.subtotal_usd_cents,
-      email: !!lower(g.email) && lower(g.email) === lower(order.email),
       paymentId: !!gPaymentId
     }
 
@@ -202,6 +206,12 @@ export default defineEventHandler(async (event) => {
         orderId: order.id,
         cbOrderId,
         failedChecks: failed,
+        emailMatch: emailMatchDiag,
+        // Provider/order identifiers (not PII/credentials) — temporary, to
+        // diagnose the request_id linkage. Trim once requestLink is settled.
+        savedRequestId: order.go2pay_request_id,
+        go2payOrderRequestId: gRequestId,
+        cbApiOrderId: payload?.api_order_id ?? null,
         callbackKeys: bodyKeys,
         orderKeys
       })
@@ -237,6 +247,7 @@ export default defineEventHandler(async (event) => {
     diag(updated.data ? 'success:marked-paid' : 'noop:no-longer-pending', {
       orderId: order.id,
       cbOrderId,
+      emailMatch: emailMatchDiag,
       callbackKeys: bodyKeys,
       orderKeys
     })

@@ -119,6 +119,13 @@ export default defineEventHandler(async (event) => {
       return { success: false, error: PAYMENT_INIT_ERROR }
     }
 
+    // Go2Pay renders the Payment Request `name` as the PURCHASE / ITEM name on
+    // the hosted page and receipt (confirmed live — not the payer's name). Use
+    // the authoritative server-side product name for a single-line order, or the
+    // order reference for a multi-line order. Never a client-submitted name.
+    const requestName =
+      itemRows.length === 1 ? itemRows[0].product_name : `Bahama Mama Order ${displayOrderNumber}`
+
     // Diagnostic (D): confirm the callback URL we're about to send — origin +
     // path template + token-format only. Never the token value or full URL.
     console.log(
@@ -128,6 +135,7 @@ export default defineEventHandler(async (event) => {
         callbackOrigin: base,
         callbackPath: '/api/payments/go2pay/<token>',
         callbackTokenValid: UUID_RE.test(String(order.payment_callback_token || '')),
+        requestName,
         sendEmail: false
       })
     )
@@ -135,7 +143,7 @@ export default defineEventHandler(async (event) => {
     let go2pay
     try {
       go2pay = await createPaymentRequest({
-        name: `${order.first_name} ${order.last_name}`.trim(),
+        name: requestName,
         email: order.email,
         phone: order.phone,
         amount: Number((order.subtotal_usd_cents / 100).toFixed(2)),
@@ -153,12 +161,14 @@ export default defineEventHandler(async (event) => {
       return { success: false, error: PAYMENT_INIT_ERROR }
     }
 
-    // Diagnostic (Issue 1): what we sent vs what Go2Pay reports about emailing.
-    // Safe fields only — request id + two booleans. No customer data / URL.
+    // Diagnostic (Issue 1 + name/title): what we sent vs what Go2Pay echoes.
+    // Safe fields only — ids, product/order name, booleans. No customer data / URL.
     console.log(
       '[checkout] Go2Pay request created —',
       JSON.stringify({
         go2payRequestId: go2pay.id,
+        sentName: requestName,
+        go2payTitle: go2pay.title ?? null,
         sentSendEmail: false,
         go2payEmailSent: go2pay.email_sent ?? null
       })
