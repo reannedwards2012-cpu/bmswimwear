@@ -6,6 +6,8 @@ import { siteUrl } from '../utils/siteUrl.js'
 const GENERIC_ERROR = 'We couldn’t place your order right now. Please try again.'
 const PAYMENT_INIT_ERROR = 'We couldn’t start payment right now. Please try again in a moment.'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const displayNumber = (orderNumber) => `BM-${String(orderNumber).padStart(6, '0')}`
 
 /**
@@ -117,6 +119,19 @@ export default defineEventHandler(async (event) => {
       return { success: false, error: PAYMENT_INIT_ERROR }
     }
 
+    // Diagnostic (D): confirm the callback URL we're about to send — origin +
+    // path template + token-format only. Never the token value or full URL.
+    console.log(
+      '[checkout] Go2Pay request —',
+      JSON.stringify({
+        orderId: order.id,
+        callbackOrigin: base,
+        callbackPath: '/api/payments/go2pay/<token>',
+        callbackTokenValid: UUID_RE.test(String(order.payment_callback_token || '')),
+        sendEmail: false
+      })
+    )
+
     let go2pay
     try {
       go2pay = await createPaymentRequest({
@@ -137,6 +152,17 @@ export default defineEventHandler(async (event) => {
       setResponseStatus(event, 502)
       return { success: false, error: PAYMENT_INIT_ERROR }
     }
+
+    // Diagnostic (Issue 1): what we sent vs what Go2Pay reports about emailing.
+    // Safe fields only — request id + two booleans. No customer data / URL.
+    console.log(
+      '[checkout] Go2Pay request created —',
+      JSON.stringify({
+        go2payRequestId: go2pay.id,
+        sentSendEmail: false,
+        go2payEmailSent: go2pay.email_sent ?? null
+      })
+    )
 
     // ── 4. Persist the Go2Pay request info; status remains 'pending' ──
     const saved = await supabase
