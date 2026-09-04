@@ -21,6 +21,18 @@
             <p class="mt-1 text-xs text-ink/40">Orders you place while signed in.</p>
           </div>
 
+          <div v-if="isAdmin" class="mt-6 border-t border-ink/10 pt-6">
+            <NuxtLink
+              to="/admin/fabrics"
+              class="flex items-center justify-between text-sm font-medium text-ink transition-colors hover:text-coral"
+            >
+              <span>Admin · Fabric inventory</span>
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </NuxtLink>
+          </div>
+
           <button
             type="button"
             class="btn-outline mt-8 w-full"
@@ -43,7 +55,7 @@ import { ref } from 'vue'
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'Your account — Bahama Mama Swimwear' })
 
-const { user, isLoggedIn, authReady, signOut } = useAuth()
+const { user, isLoggedIn, isAdmin, authReady, signOut } = useAuth()
 
 const signingOut = ref(false)
 

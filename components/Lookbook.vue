@@ -1,6 +1,6 @@
 <template>
   <section class="section overflow-hidden bg-shell">
-    <FancyHeading eyebrow="The Lookbook" title="A Taste of *Bahama Mama*" center size="sm" />
+    <FancyHeading eyebrow="The Lookbook" title="A Taste of *Bahama Mama*" center />
 
     <div class="mt-10 md:mt-14">
       <!-- book -->

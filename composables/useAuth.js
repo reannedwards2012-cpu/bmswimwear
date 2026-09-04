@@ -79,6 +79,10 @@ export function useAuth() {
   const user = useState(USER_KEY, () => null)
   const authReady = useState(READY_KEY, () => false)
   const isLoggedIn = computed(() => !!user.value)
+  // Display-only. Never used for authorization — every admin API route
+  // independently re-verifies app_metadata.is_admin from the live Supabase
+  // user record via requireAdmin(). This just drives UX (nav link, redirect).
+  const isAdmin = computed(() => user.value?.app_metadata?.is_admin === true)
 
   async function signUp(email, password) {
     const client = getClient()
@@ -154,6 +158,7 @@ export function useAuth() {
   return {
     user,
     isLoggedIn,
+    isAdmin,
     authReady,
     signUp,
     signIn,

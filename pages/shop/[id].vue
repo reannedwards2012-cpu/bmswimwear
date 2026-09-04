@@ -53,7 +53,7 @@
           v-model="selectedColour"
           label="Colour"
           type="colour"
-          :options="product.colours"
+          :options="colourOptions"
           :invalid="showErrors && missingOptions.includes('colour')"
           class="mt-8"
         />
@@ -148,6 +148,36 @@ const selectedColour = ref(null)
 const selectedSize = ref(null)
 const selectedCoverage = ref(null)
 
+// Fallback colour list — the static data/products.js colours, all treated as
+// available. Used only when the live fabric API is unreachable.
+const colourFallback = computed(() =>
+  product.colours.map((c) => ({ id: c.id, name: c.name, hex: c.hex, status: 'available' }))
+)
+
+// Live fabric availability from Supabase (product_fabrics + fabrics), with a
+// fallback to the catalogue's static colour list if the API call fails. Only
+// products that have colours in the catalogue call the API at all — a
+// product with none (e.g. a kaftan) never fetches and never shows a colour
+// selector, unchanged from before.
+//
+// Important: a *successful* response is authoritative even when its fabrics
+// array is empty (a product legitimately not yet linked to any fabric) — that
+// case must NOT fall back to the hardcoded list. Only an actual request
+// failure (thrown/non-2xx, surfaced as `fabricsError`) falls back.
+const { data: fabricsResponse, error: fabricsError } = await useAsyncData(
+  `product-fabrics-${product.id}`,
+  () => $fetch(`/api/products/${encodeURIComponent(product.id)}/fabrics`),
+  { immediate: product.colours.length > 0 }
+)
+
+const colourOptions = computed(() => {
+  if (!product.colours.length) return []
+  if (!fabricsError.value && Array.isArray(fabricsResponse.value?.fabrics)) {
+    return fabricsResponse.value.fabrics
+  }
+  return colourFallback.value
+})
+
 // Which options this specific product actually offers → which are required.
 const requiredOptions = computed(() => {
   const r = []
@@ -179,7 +209,17 @@ function onAddToCart() {
     return
   }
 
-  const colour = product.colours.find((c) => c.id === selectedColour.value)
+  const colour = colourOptions.value.find((c) => c.id === selectedColour.value)
+
+  // Defense in depth: an 'unavailable' swatch is disabled in the UI and can't
+  // be clicked, so this shouldn't be reachable — but never let an unavailable
+  // fabric reach the cart (e.g. if it became unavailable after selection).
+  if (colour?.status === 'unavailable') {
+    selectedColour.value = null
+    showErrors.value = true
+    return
+  }
+
   addItem(product, {
     size: selectedSize.value,
     colourId: colour?.id ?? null,
