@@ -26,8 +26,8 @@
       <div class="relative md:-mr-4 lg:-mr-12">
         <div class="grid grid-cols-2 gap-4 lg:gap-5">
           <img
-            src="/images/site/hero-1.jpg"
-            alt="Bahama Mama red one-piece on the beach at golden hour"
+            src="/images/site/hero-3.jpg"
+            alt="Bahama Mama turquoise bell-sleeve one-piece on a Grenada balcony"
             class="mt-12 aspect-[3/4] w-full rounded-4xl object-cover shadow-soft lg:mt-20"
           />
           <img
