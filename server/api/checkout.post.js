@@ -2,6 +2,7 @@ import { buildValidatedOrder } from '../utils/checkoutOrder.js'
 import { supabaseAdmin } from '../utils/supabaseAdmin.js'
 import { createPaymentRequest, getPaymentRequest } from '../utils/go2pay.js'
 import { siteUrl } from '../utils/siteUrl.js'
+import { getOptionalUserId } from '../utils/authUser.js'
 
 const GENERIC_ERROR = 'We couldn’t place your order right now. Please try again.'
 const PAYMENT_INIT_ERROR = 'We couldn’t start payment right now. Please try again in a moment.'
@@ -53,6 +54,11 @@ export default defineEventHandler(async (event) => {
 
   const { orderRow, itemRows } = result
   const checkoutId = orderRow.checkout_idempotency_key
+
+  // Attach the verified signed-in customer, or null for guest checkout.
+  // NEVER read from the request body. Only used on a fresh insert (step 2);
+  // an existing order's user_id is left untouched on retry.
+  orderRow.user_id = await getOptionalUserId(event)
 
   const ORDER_COLS =
     'id, order_number, status, first_name, last_name, email, phone, subtotal_usd_cents, payment_callback_token, go2pay_request_id, go2pay_payment_url'

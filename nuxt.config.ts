@@ -5,6 +5,17 @@ export default defineNuxtConfig({
     appManifest: false
   },
 
+  // Browser-safe Supabase config for Auth (publishable key only — NEVER the
+  // secret key, which stays server-only in server/utils/supabaseAdmin.js).
+  // Values are inlined from Netlify build env; override at runtime with
+  // NUXT_PUBLIC_SUPABASE_URL / NUXT_PUBLIC_SUPABASE_KEY if needed.
+  runtimeConfig: {
+    public: {
+      supabaseUrl: process.env.SUPABASE_URL || '',
+      supabaseKey: process.env.SUPABASE_PUBLISHABLE_KEY || ''
+    }
+  },
+
   // Nuxt ignores a root postcss.config.*; Tailwind must be wired here.
   postcss: {
     plugins: {

@@ -19,6 +19,8 @@
       </nav>
 
       <div class="flex items-center gap-2">
+        <AuthMenu />
+
         <NuxtLink
           to="/cart"
           class="relative grid h-10 w-10 place-items-center rounded-full text-ink/80 transition-colors hover:text-ink"
@@ -72,6 +74,14 @@
           >
             {{ item.label }}
           </NuxtLink>
+          <NuxtLink
+            :to="isLoggedIn ? '/account' : '/login'"
+            class="border-b border-ink/5 py-3 text-sm font-medium text-ink/80"
+            active-class="text-ink"
+            @click="open = false"
+          >
+            {{ isLoggedIn ? 'My account' : 'Sign in' }}
+          </NuxtLink>
           <NuxtLink to="/shop" class="btn-dark mt-4" @click="open = false">Shop now</NuxtLink>
         </div>
       </nav>
@@ -90,6 +100,9 @@ const links = [
 ]
 
 const { totalUnits } = useCart()
+// Mobile menu only renders after a tap (client-side), so `isLoggedIn` here is
+// never part of SSR/hydration.
+const { isLoggedIn } = useAuth()
 
 const open = ref(false)
 const scrolled = ref(false)

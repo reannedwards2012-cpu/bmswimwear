@@ -19,6 +19,20 @@
       >
         <!-- left: customer + delivery -->
         <div class="space-y-10">
+          <!-- account prompt (subtle) -->
+          <p v-if="authReady && isLoggedIn" class="-mt-2 text-sm text-ink/70">
+            <span class="font-medium text-ink">✓ Signed in as {{ user?.email }}</span><br >
+            <span class="text-xs text-ink/50">This order will be saved to your account.</span>
+          </p>
+          <p v-else class="-mt-2 text-sm text-ink/70">
+            Already have an account?
+            <NuxtLink
+              to="/login?redirect=/checkout"
+              class="font-semibold text-coral link-underline"
+            >Sign in</NuxtLink><br >
+            <span class="text-xs text-ink/50">Sign in to save this order to your account.</span>
+          </p>
+
           <!-- customer -->
           <section>
             <h2 class="font-display text-lg font-semibold text-ink">Customer information</h2>
@@ -179,6 +193,7 @@ import { DELIVERY_METHODS, useCheckout } from '~/composables/useCheckout'
 useHead({ title: 'Checkout — Bahama Mama Swimwear' })
 
 const { items, subtotalUsd } = useCart()
+const { user, isLoggedIn, authReady, getAccessToken } = useAuth()
 const {
   customer,
   deliveryMethod,
@@ -239,8 +254,12 @@ async function onSubmit() {
 
   submitting.value = true
   try {
+    // Attach the access token when signed in so the server can link the order
+    // to the customer. Guests send no header — checkout is otherwise identical.
+    const token = await getAccessToken()
     const res = await $fetch('/api/checkout', {
       method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: buildPayload()
     })
 
