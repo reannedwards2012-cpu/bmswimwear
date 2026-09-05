@@ -85,59 +85,11 @@ body {
   }
 }
 
-/* Lookbook — a 3D magazine page turn */
-.lb-book {
-  perspective: 2400px;
-}
-.lb-leaf {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  width: 50%;
-  transform-style: preserve-3d;
-  z-index: 30;
-  box-shadow: 0 30px 60px -20px rgba(27, 42, 47, 0.35);
-}
-@media (max-width: 639px) {
-  .lb-leaf {
-    width: 100%;
-  }
-}
-.lb-leaf--next {
-  right: 0;
-  transform-origin: left center;
-  animation: lb-turn-next 0.72s cubic-bezier(0.3, 0, 0.2, 1) forwards;
-}
-.lb-leaf--prev {
-  left: 0;
-  transform-origin: right center;
-  animation: lb-turn-prev 0.72s cubic-bezier(0.3, 0, 0.2, 1) forwards;
-}
-.lb-leaf__face {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  background: #faf2ea; /* sand */
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-.lb-leaf__face--back {
-  transform: rotateY(180deg);
-}
-@keyframes lb-turn-next {
-  from { transform: rotateY(0deg); }
-  to { transform: rotateY(-180deg); }
-}
-@keyframes lb-turn-prev {
-  from { transform: rotateY(0deg); }
-  to { transform: rotateY(180deg); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .lb-leaf--next,
-  .lb-leaf--prev {
-    animation-duration: 1ms;
-  }
-}
+/* Lookbook — the flip animation itself is rendered by the `page-flip`
+   library (StPageFlip) straight onto a canvas inside .lb-flipbook; see
+   components/Lookbook.vue. Only the resting-frame presentation (rounded
+   corners, ambient shadow) is CSS, applied inline via Tailwind classes on
+   that wrapper — nothing custom needed here. */
 
 /* honour reduced-motion preferences — keep colour/opacity, drop movement */
 @media (prefers-reduced-motion: reduce) {
