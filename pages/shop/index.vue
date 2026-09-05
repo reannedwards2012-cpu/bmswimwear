@@ -47,7 +47,7 @@
         <p class="mx-auto mt-3 max-w-md text-cream/75">
           Custom cuts, colours and prints are our specialty. Tell us what you're picturing.
         </p>
-        <NuxtLink to="/contact" class="btn-primary mt-7">Start a custom order</NuxtLink>
+        <NuxtLink to="/contact?subject=custom" class="btn-primary mt-7">Start a custom order</NuxtLink>
       </div>
     </section>
   </div>

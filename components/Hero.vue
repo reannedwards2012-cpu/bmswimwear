@@ -19,7 +19,7 @@
         </p>
         <div class="mt-9 flex flex-wrap gap-4">
           <NuxtLink to="/shop" class="btn-primary shadow-soft">SHOP SWIMWEAR</NuxtLink>
-          <NuxtLink to="/contact" class="btn-outline">GO CUSTOM</NuxtLink>
+          <NuxtLink to="/contact?subject=custom" class="btn-outline">GO CUSTOM</NuxtLink>
         </div>
       </div>
 

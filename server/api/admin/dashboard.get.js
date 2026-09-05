@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
     const supabase = supabaseAdmin()
     const range = getPeriodRange(period)
 
-    const [salesRes, recentRes, anomalyRes] = await Promise.all([
+    const [salesRes, recentRes, anomalyRes, newInquiriesRes] = await Promise.all([
       // Qualifying orders whose PAYMENT was confirmed in range, with their
       // line items — one query feeds sales/order-count/AOV, best seller,
       // top products, and the trend chart, so the period filter only ever
@@ -94,7 +94,11 @@ export default defineEventHandler(async (event) => {
       // NULL comparisons are never true) — this query exists purely so that
       // exclusion doesn't happen silently: any hit is logged below with
       // enough detail for an admin to find and fix the row in Supabase.
-      supabase.from('orders').select('id, order_number, status').in('status', SALES_QUALIFYING_STATUSES).is('paid_at', null)
+      supabase.from('orders').select('id, order_number, status').in('status', SALES_QUALIFYING_STATUSES).is('paid_at', null),
+      // Inquiry Management — a single "unhandled inbox" count for the Overview
+      // (status = 'new', all-time, NOT period-scoped). Best-effort: a failure
+      // here never blocks the sales dashboard. Independent of everything above.
+      supabase.from('inquiries').select('id', { count: 'exact', head: true }).eq('status', 'new')
     ])
 
     if (salesRes.error) {
@@ -116,6 +120,14 @@ export default defineEventHandler(async (event) => {
         `[admin/dashboard] ANOMALY: ${anomalyRes.data.length} qualifying order(s) have status ∈ {paid,processing,completed} but paid_at is null — excluded from all period-scoped analytics (no authoritative timestamp to place them in). Needs manual review:`,
         anomalyRes.data.map((o) => ({ id: o.id, orderNumber: o.order_number, status: o.status }))
       )
+    }
+
+    // Best-effort — a broken inquiries read must not take down the dashboard.
+    let newInquiriesCount = 0
+    if (newInquiriesRes.error) {
+      console.error('[admin/dashboard] new-inquiries count failed:', newInquiriesRes.error.message)
+    } else {
+      newInquiriesCount = newInquiriesRes.count ?? 0
     }
 
     const orders = salesRes.data ?? []
@@ -171,7 +183,8 @@ export default defineEventHandler(async (event) => {
       metrics: { salesUsdCents, orderCount, averageOrderUsdCents, bestSeller, xcd },
       salesTrend,
       topProducts,
-      recentOrders: (recentRes.data ?? []).map(mapOrderListItem)
+      recentOrders: (recentRes.data ?? []).map(mapOrderListItem),
+      inquiries: { newCount: newInquiriesCount }
     }
   } catch (err) {
     console.error('[admin/dashboard] unexpected error:', err?.message)

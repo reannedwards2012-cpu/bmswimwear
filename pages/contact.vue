@@ -4,46 +4,54 @@
       <div class="container-bm py-16 md:py-20 text-center">
         <FancyHeading eyebrow="Get in Touch" title="Let's *Connect*" center size="lg">
           Questions about sizing, custom commissions or an existing order? Send us a
-          note — we usually reply within one business day.
+          note and we'll be in touch.
         </FancyHeading>
       </div>
     </section>
 
     <section class="section container-bm grid gap-10 md:grid-cols-[1.3fr_1fr]">
-      <form class="space-y-4 rounded-4xl bg-cream p-7 shadow-card md:p-9" @submit.prevent="sent = true">
+      <form class="space-y-4 rounded-4xl bg-cream p-7 shadow-card md:p-9" novalidate @submit.prevent="onSubmit">
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block">
             <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">First name</span>
-            <input v-model="form.first" required type="text" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none" />
+            <input v-model.trim="form.firstName" required type="text" maxlength="80" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none" />
           </label>
           <label class="block">
             <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Last name</span>
-            <input v-model="form.last" type="text" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none" />
+            <input v-model.trim="form.lastName" type="text" maxlength="80" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none" />
           </label>
         </div>
         <label class="block">
           <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Email</span>
-          <input v-model="form.email" required type="email" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none" />
+          <input v-model.trim="form.email" required type="email" maxlength="160" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none" />
+        </label>
+        <label class="block">
+          <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Phone <span class="text-ink/35">(optional)</span></span>
+          <input v-model.trim="form.phone" type="tel" maxlength="40" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none" />
         </label>
         <label class="block">
           <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Subject</span>
           <select v-model="form.subject" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none">
-            <option>Custom / bespoke design</option>
-            <option>Sizing &amp; fit help</option>
-            <option>An existing order</option>
-            <option>Wholesale</option>
-            <option>Just saying hi</option>
+            <option v-for="s in SUBJECTS" :key="s" :value="s">{{ s }}</option>
           </select>
         </label>
         <label class="block">
           <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Message</span>
-          <textarea v-model="form.message" required rows="5" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none"></textarea>
+          <textarea v-model.trim="form.message" required rows="5" maxlength="4000" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none"></textarea>
         </label>
-        <button type="submit" class="btn-primary w-full shadow-soft">Send message</button>
-        <p v-if="sent" class="text-sm text-coral">
-          Thanks {{ form.first || 'love' }} — your message has been noted. (Front-end only for now — no
-          email is actually sent yet.)
-        </p>
+
+        <!-- honeypot: hidden from people, tempting to bots. Real submissions leave it empty. -->
+        <div class="hidden" aria-hidden="true">
+          <label>Company
+            <input v-model="form.company" type="text" tabindex="-1" autocomplete="off" />
+          </label>
+        </div>
+
+        <button type="submit" class="btn-primary w-full shadow-soft disabled:cursor-not-allowed disabled:opacity-60" :disabled="submitting">
+          {{ submitting ? 'Sending…' : 'Send message' }}
+        </button>
+        <p v-if="sent" class="text-sm text-ink/70">Thanks! We've got your message and will be in touch soon.</p>
+        <p v-else-if="error" class="text-sm text-coral">{{ error }}</p>
       </form>
 
       <aside class="space-y-4">
@@ -88,9 +96,52 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
+import { INQUIRY_SUBJECTS, INQUIRY_SUBJECT_SLUGS } from '~/data/constants.js'
 
-const form = reactive({ first: '', last: '', email: '', subject: 'Custom / bespoke design', message: '' })
+const route = useRoute()
+const SUBJECTS = INQUIRY_SUBJECTS
+
+// Deep-link support: /contact?subject=custom preselects "Custom / bespoke design".
+const initialSubject =
+  (typeof route.query.subject === 'string' && INQUIRY_SUBJECT_SLUGS[route.query.subject]) || 'Custom / bespoke design'
+
+const form = reactive({
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  subject: initialSubject,
+  message: '',
+  company: '' // honeypot
+})
+
+const submitting = ref(false)
 const sent = ref(false)
+const error = ref('')
+
+async function onSubmit() {
+  if (submitting.value || sent.value) return
+  error.value = ''
+
+  if (!form.firstName || !form.email || !form.message) {
+    error.value = 'Please fill in your name, email and a message.'
+    return
+  }
+
+  submitting.value = true
+  try {
+    await $fetch('/api/inquiries', { method: 'POST', body: { ...form } })
+    sent.value = true
+  } catch (err) {
+    error.value =
+      err?.data?.error ||
+      (err?.statusCode === 429
+        ? 'You’ve sent a few messages already — please wait a little while before sending another.'
+        : 'We couldn’t send your message right now. Please try again in a moment.')
+  } finally {
+    submitting.value = false
+  }
+}
 
 const socials = [
   {

@@ -44,6 +44,19 @@
         <span class="text-ink/35">(not included in the USD figures above)</span>
       </p>
 
+      <!-- inbox glance — current-state, not period analytics -->
+      <NuxtLink
+        to="/admin/inquiries?status=new"
+        class="mt-4 flex items-center gap-2 rounded-2xl bg-cream px-4 py-3 text-sm shadow-card transition-colors hover:text-coral"
+      >
+        <span class="grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-xs font-semibold"
+          :class="inquiryNewCount > 0 ? 'bg-coral/15 text-coral' : 'bg-ink/10 text-ink/50'">
+          {{ inquiryNewCount }}
+        </span>
+        <span class="font-medium text-ink">new {{ inquiryNewCount === 1 ? 'inquiry' : 'inquiries' }}</span>
+        <span class="ml-auto text-xs text-ink/35">View →</span>
+      </NuxtLink>
+
       <!-- sales trend -->
       <section class="mt-6 rounded-4xl bg-cream p-6 shadow-card md:p-7">
         <h2 class="font-display text-lg font-semibold text-ink">Sales Trend</h2>
@@ -142,6 +155,9 @@ const {
   server: false,
   watch: [period]
 })
+
+// Unhandled-inbox glance — not period-scoped (same as Recent Orders).
+const inquiryNewCount = computed(() => data.value?.inquiries?.newCount ?? 0)
 
 const STATUS_STYLES = {
   paid: 'bg-shell text-ink/70',

@@ -93,7 +93,7 @@
             </li>
           </ol>
 
-          <NuxtLink to="/contact" class="btn-primary mt-10 w-full shadow-soft sm:w-auto">
+          <NuxtLink to="/contact?subject=custom" class="btn-primary mt-10 w-full shadow-soft sm:w-auto">
             START A CUSTOM ORDER
           </NuxtLink>
         </div>
@@ -216,39 +216,16 @@
       </FancyHeading>
 
       <div class="mx-auto mt-12 grid max-w-4xl gap-10 md:grid-cols-[1.3fr_1fr]">
-        <form class="space-y-4 rounded-4xl bg-cream p-7 shadow-card md:p-9" @submit.prevent="sent = true">
-          <div class="grid gap-4 sm:grid-cols-2">
-            <label class="block">
-              <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">First name</span>
-              <input v-model="form.first" type="text" required class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none" />
-            </label>
-            <label class="block">
-              <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Last name</span>
-              <input v-model="form.last" type="text" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none" />
-            </label>
-          </div>
-          <label class="block">
-            <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Email</span>
-            <input v-model="form.email" type="email" required class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none" />
-          </label>
-          <label class="block">
-            <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Subject</span>
-            <select v-model="form.subject" class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none">
-              <option>Custom / bespoke design</option>
-              <option>Sizing &amp; fit help</option>
-              <option>An existing order</option>
-              <option>Just saying hi</option>
-            </select>
-          </label>
-          <label class="block">
-            <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Message</span>
-            <textarea v-model="form.message" rows="4" required class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none"></textarea>
-          </label>
-          <button type="submit" class="btn-primary w-full shadow-soft">Send message</button>
-          <p v-if="sent" class="text-sm text-coral">
-            Thanks {{ form.first || 'love' }} — your message has been noted, we'll be in touch soon.
+        <div class="flex flex-col justify-center rounded-4xl bg-cream p-7 shadow-card md:p-9">
+          <p class="font-display text-2xl font-semibold text-ink md:text-3xl">Send us a message</p>
+          <p class="mt-3 leading-relaxed text-ink/70">
+            Sizing questions, a custom commission, an existing order or just to say hi — tell us what
+            you're thinking and we'll get back to you.
           </p>
-        </form>
+          <NuxtLink to="/contact" class="btn-primary mt-6 w-full shadow-soft sm:w-auto sm:self-start">
+            Go to the contact form
+          </NuxtLink>
+        </div>
 
         <aside class="space-y-4">
           <div class="rounded-4xl bg-cream p-6 shadow-card transition-shadow duration-300 hover:shadow-soft">
@@ -278,7 +255,7 @@
           <div class="rounded-4xl bg-ink p-6 text-cream shadow-card transition-shadow duration-300 hover:shadow-soft">
             <p class="text-xs font-semibold uppercase tracking-widest2 text-blush">Custom Orders</p>
             <p class="mt-2 text-sm text-cream/75">Ready for a custom swimsuit that fits you like a dream?</p>
-            <NuxtLink to="/contact" class="mt-4 inline-block rounded-full border border-cream/30 px-5 py-2 text-xs font-semibold uppercase tracking-widest2 transition-colors duration-200 hover:bg-cream hover:text-ink">
+            <NuxtLink to="/contact?subject=custom" class="mt-4 inline-block rounded-full border border-cream/30 px-5 py-2 text-xs font-semibold uppercase tracking-widest2 transition-colors duration-200 hover:bg-cream hover:text-ink">
               Custom order inquiry
             </NuxtLink>
           </div>
@@ -289,7 +266,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { CATEGORIES, MADE_TO_ORDER } from '~/data/constants.js'
 
 const GRID_LIMIT = 12 // 4 columns × 3 rows
@@ -335,9 +312,7 @@ const socials = [
   }
 ]
 
+// Newsletter form (front-end only — intentionally untouched by Inquiry Management).
 const email = ref('')
 const subscribed = ref(false)
-
-const form = reactive({ first: '', last: '', email: '', subject: 'Custom / bespoke design', message: '' })
-const sent = ref(false)
 </script>

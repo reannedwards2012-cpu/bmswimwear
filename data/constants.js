@@ -17,3 +17,23 @@ export const CATEGORIES = ['Tops', 'Bottoms', 'One Pieces', 'Cover Ups']
 
 // Every piece is made to order — one turnaround, not per-product.
 export const MADE_TO_ORDER = { turnaround: '10–14 business days' }
+
+// Contact / custom-order inquiry subjects. Shared by the public contact form
+// <select> and the server-side inquiry validation (server/utils/inquiryValidation.js).
+// The stored `inquiries.subject` is the display string itself (same approach as
+// `products.category`) — no separate slug/label pair. An incoming subject not
+// in this list is coerced to 'Other' server-side.
+export const INQUIRY_SUBJECTS = [
+  'Custom / bespoke design',
+  'Sizing & fit help',
+  'An existing order',
+  'Wholesale',
+  'Just saying hi',
+  'Other'
+]
+
+// Short deep-link slugs → subject label, for links like /contact?subject=custom
+// (the "Start a custom order" CTAs). Only the pairs we actually link to.
+export const INQUIRY_SUBJECT_SLUGS = {
+  custom: 'Custom / bespoke design'
+}
