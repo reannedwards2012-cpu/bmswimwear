@@ -1,6 +1,9 @@
 /**
- * Calendar-boundary date ranges for the admin dashboard
- * (server/api/admin/dashboard.get.js).
+ * Calendar-boundary date ranges shared by the admin dashboard
+ * (server/api/admin/dashboard.get.js, which ranges by `paid_at`) and the
+ * admin orders list (server/api/admin/orders/index.get.js, which ranges by
+ * `created_at`) — this module only computes boundaries, it has no opinion on
+ * which timestamp column a caller applies them to.
  *
  * Timezone approach: the storefront has one home market — Grenada (the
  * Go2Pay integration is go2pay.gd) — which observes Atlantic Standard Time
