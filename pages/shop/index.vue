@@ -27,13 +27,18 @@
         <span class="ml-auto text-sm text-ink/40">{{ visible.length }} pieces</span>
       </div>
 
-      <div class="mt-10 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-        <ProductCard v-for="p in visible" :key="p.id" :product="p" />
-      </div>
+      <p v-if="pending" class="mt-10 text-ink/50">Loading pieces…</p>
+      <p v-else-if="error" class="mt-10 text-coral">Couldn’t load the collection. Please refresh.</p>
 
-      <p v-if="visible.length === 0" class="mt-10 text-ink/50">
-        No pieces in this category yet — check back soon.
-      </p>
+      <template v-else>
+        <div class="mt-10 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+          <ProductCard v-for="p in visible" :key="p.id" :product="p" />
+        </div>
+
+        <p v-if="visible.length === 0" class="mt-10 text-ink/50">
+          No pieces in this category yet — check back soon.
+        </p>
+      </template>
 
       <div class="mt-20 rounded-4xl bg-ink px-8 py-12 text-center text-cream shadow-soft md:px-14">
         <h2 class="font-display text-2xl font-semibold md:text-3xl">
@@ -50,16 +55,20 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { categories, getProductsByCategory } from '~/data/products.js'
+import { CATEGORIES } from '~/data/constants.js'
 
 const route = useRoute()
+const { products, pending, error } = useProductList()
 
-const filters = [{ value: 'all', label: 'All' }, ...categories.map((c) => ({ value: c.value, label: c.label }))]
+// Category value === label (the canonical string) — no slug/label pair.
+const filters = [{ value: 'all', label: 'All' }, ...CATEGORIES.map((c) => ({ value: c, label: c }))]
 
 const initial = filters.some((f) => f.value === route.query.category)
   ? String(route.query.category)
   : 'all'
 const active = ref(initial)
 
-const visible = computed(() => getProductsByCategory(active.value))
+const visible = computed(() =>
+  active.value === 'all' ? products.value : products.value.filter((p) => p.category === active.value)
+)
 </script>

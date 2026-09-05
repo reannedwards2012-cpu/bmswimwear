@@ -185,7 +185,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { MADE_TO_ORDER } from '~/data/products.js'
+import { MADE_TO_ORDER } from '~/data/constants.js'
 import { formatUsd } from '~/utils/money'
 import { COUNTRIES } from '~/utils/countries'
 import { DELIVERY_METHODS, useCheckout } from '~/composables/useCheckout'

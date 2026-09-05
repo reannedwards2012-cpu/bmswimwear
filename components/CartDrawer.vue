@@ -144,7 +144,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { formatUsd } from '~/utils/money'
-import { MADE_TO_ORDER } from '~/data/products.js'
+import { MADE_TO_ORDER } from '~/data/constants.js'
 
 const {
   items,

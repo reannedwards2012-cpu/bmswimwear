@@ -175,7 +175,7 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { categories } from '~/data/products.js'
+import { CATEGORIES } from '~/data/constants.js'
 
 const props = defineProps({
   // null = creating a new fabric; an admin-API fabric object = editing.
@@ -192,13 +192,11 @@ const emit = defineEmits(['submit', 'cancel'])
 // behaviour and submitted `productIds` array are unchanged. A category with
 // no eligible products (e.g. none currently linkable) is skipped.
 const groupedProducts = computed(() =>
-  categories
-    .map((c) => ({
-      value: c.value,
-      label: c.label,
-      products: props.productOptions.filter((p) => p.category === c.value)
-    }))
-    .filter((g) => g.products.length > 0)
+  CATEGORIES.map((label) => ({
+    value: label,
+    label,
+    products: props.productOptions.filter((p) => p.category === label)
+  })).filter((g) => g.products.length > 0)
 )
 
 const FABRIC_TYPES = ['solid', 'print', 'mesh', 'specialty']

@@ -13,17 +13,17 @@ export default defineEventHandler(async (event) => {
   await requireAdmin(event) // throws 401 / 403
 
   const body = await readBody(event).catch(() => null)
-  const { issues, fields } = validateFabricFields(body, { partial: false })
-  const { issues: idIssues, productIds } = validateProductIds(body?.productIds)
-  const allIssues = [...issues, ...idIssues]
-
-  if (allIssues.length) {
-    setResponseStatus(event, 400)
-    return { error: 'Invalid fabric details.', issues: allIssues }
-  }
+  const { issues: fieldIssues, fields } = validateFabricFields(body, { partial: false })
 
   try {
     const supabase = supabaseAdmin()
+
+    const { issues: idIssues, productIds } = await validateProductIds(body?.productIds, supabase)
+    const allIssues = [...fieldIssues, ...idIssues]
+    if (allIssues.length) {
+      setResponseStatus(event, 400)
+      return { error: 'Invalid fabric details.', issues: allIssues }
+    }
 
     const { data: fabric, error: insertError } = await supabase
       .from('fabrics')

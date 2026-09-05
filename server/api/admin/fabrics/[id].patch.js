@@ -34,14 +34,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event).catch(() => null)
-  const { issues, fields } = validateFabricFields(body, { partial: true })
-  const { issues: idIssues, productIds } = validateProductIds(body?.productIds)
-  const allIssues = [...issues, ...idIssues]
-
-  if (allIssues.length) {
-    setResponseStatus(event, 400)
-    return { error: 'Invalid fabric details.', issues: allIssues }
-  }
+  const { issues: fieldIssues, fields } = validateFabricFields(body, { partial: true })
 
   const updates = {}
   for (const [key, column] of Object.entries(FIELD_MAP)) {
@@ -50,6 +43,13 @@ export default defineEventHandler(async (event) => {
 
   try {
     const supabase = supabaseAdmin()
+
+    const { issues: idIssues, productIds } = await validateProductIds(body?.productIds, supabase)
+    const allIssues = [...fieldIssues, ...idIssues]
+    if (allIssues.length) {
+      setResponseStatus(event, 400)
+      return { error: 'Invalid fabric details.', issues: allIssues }
+    }
 
     if (Object.keys(updates).length) {
       const { error: updateError, data: updated } = await supabase

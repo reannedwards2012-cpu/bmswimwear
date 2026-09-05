@@ -1,5 +1,6 @@
 import { buildValidatedOrder } from '../utils/checkoutOrder.js'
 import { supabaseAdmin } from '../utils/supabaseAdmin.js'
+import { fetchCatalogueForCheckout } from '../utils/productCatalogue.js'
 import { createPaymentRequest, getPaymentRequest } from '../utils/go2pay.js'
 import { siteUrl } from '../utils/siteUrl.js'
 import { getOptionalUserId } from '../utils/authUser.js'
@@ -46,7 +47,22 @@ async function updateWithRetry(build) {
 export default defineEventHandler(async (event) => {
   const body = await readBody(event).catch(() => null)
 
-  const result = buildValidatedOrder(body)
+  // Authoritative product data — fetched fresh from Supabase on every attempt
+  // (so a cart whose product changed since it was added is revalidated, not
+  // trusted). A DB failure here is a system error, not a validation error.
+  let catalogue
+  try {
+    const productSlugs = Array.isArray(body?.items)
+      ? body.items.map((i) => (i && typeof i === 'object' ? i.productId : null)).filter(Boolean)
+      : []
+    catalogue = await fetchCatalogueForCheckout(supabaseAdmin(), productSlugs)
+  } catch (err) {
+    console.error('[checkout] catalogue fetch failed:', err?.message)
+    setResponseStatus(event, 500)
+    return { success: false, error: GENERIC_ERROR }
+  }
+
+  const result = buildValidatedOrder(body, catalogue)
   if (!result.ok) {
     setResponseStatus(event, 400)
     return { success: false, error: result.error, issues: result.issues }

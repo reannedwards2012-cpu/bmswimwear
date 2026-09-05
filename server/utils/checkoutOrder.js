@@ -2,11 +2,20 @@
  * Server-side checkout validation + authoritative order building.
  *
  * Pure module (no Nitro/Supabase imports) so it can be unit-tested directly.
- * NOTHING from the client payload is trusted for money, names or images — every
- * stored value is looked up from the catalogue in data/products.js, which holds
- * the single source of truth for each product's USD/XCD price.
+ * NOTHING from the client payload is trusted for money, names or images.
+ *
+ * The authoritative product data is passed in as `catalogue` — a
+ * `Map<slug, entry>` the caller builds from live Supabase data
+ * (server/utils/productCatalogue.js). Entry shape:
+ *   { id, title, price, priceXcd, sizes: string[], coverage: string[], colours: [{id,name}] }
+ * (price/priceXcd in dollars). A product missing from the map — inactive, or
+ * simply not a real product — is rejected exactly as an unknown product was
+ * before. The `colours` list is already filtered to fabrics that are
+ * active + available + not 'unavailable' AND compatible with the product,
+ * so a stale/incompatible fabric selection is rejected with no extra logic
+ * here. This is also what revalidates a cart whose product changed after
+ * the item was added — the map is fetched fresh on every checkout attempt.
  */
-import { getProductById } from '../../data/products.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -31,12 +40,15 @@ const str = (v) => (typeof v === 'string' ? v.trim() : '')
 const toCents = (dollars) => Math.round(dollars * 100)
 
 /**
+ * @param {object} payload  the client checkout body
+ * @param {Map<string, object>} catalogue  slug -> authoritative product entry (see file header)
  * @returns {{ ok: false, error: string, issues: string[] }}
  *        | {{ ok: true, orderRow: object, itemRows: object[], subtotalUsdCents: number }}
  */
-export function buildValidatedOrder(payload) {
+export function buildValidatedOrder(payload, catalogue) {
   const issues = []
   const p = payload && typeof payload === 'object' ? payload : {}
+  const lookup = (slug) => (catalogue instanceof Map ? catalogue.get(slug) : undefined)
 
   // ── checkout attempt id (client-generated, dedupes retries) ──
   const checkoutId = str(p.checkoutId)
@@ -139,7 +151,7 @@ export function buildValidatedOrder(payload) {
       continue
     }
 
-    const product = getProductById(productId)
+    const product = lookup(productId)
     if (!product) {
       issues.push(`"${productId}" is not an available product.`)
       continue

@@ -1,15 +1,12 @@
 /**
- * Server-side validation for admin fabric writes (POST/PATCH). Pure module —
- * no Nitro/Supabase imports — so field rules and product-id checks live in
- * one place shared by both endpoints.
+ * Server-side validation for admin fabric writes (POST/PATCH).
  *
- * Product ids are checked against the real catalogue in data/products.js
- * (the single source of truth for products; no Supabase products table).
- * The temporary Go2Pay test product is excluded — it has no colour options
- * on the storefront and should never gain a fabric relationship.
+ * `validateFabricFields` is a pure function. `validateProductIds` is async —
+ * it checks product slugs against the live Supabase `products` table (since
+ * Phase C, products are Supabase-backed, not data/products.js). The Test
+ * Product is still excluded — it has no storefront colour options and should
+ * never gain a fabric relationship.
  */
-import { products } from '../../data/products.js'
-
 export const FABRIC_TYPES = ['solid', 'print', 'mesh', 'specialty']
 export const FABRIC_STATUSES = ['available', 'low', 'unavailable']
 export const FABRIC_UNITS = ['yards', 'metres']
@@ -18,8 +15,6 @@ const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const HEX_RE = /^#[0-9a-fA-F]{6}$/
 const MAX_NAME = 80
 const MAX_IMAGE_URL = 500
-
-const CATALOGUE_PRODUCT_IDS = new Set(products.filter((p) => p.id !== 'test-product').map((p) => p.id))
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '')
 const isEmpty = (v) => v === null || v === undefined || v === ''
@@ -122,16 +117,23 @@ export function validateFabricFields(body, { partial = false } = {}) {
 }
 
 /**
- * Validate a `productIds` array against the real catalogue.
- * Returns `productIds: undefined` when the key was omitted entirely (PATCH
- * callers use this to mean "don't touch relationships").
+ * Validate a `productIds` array (catalogue slugs) against the live Supabase
+ * `products` table. Returns `productIds: undefined` when the key was omitted
+ * entirely (PATCH callers use this to mean "don't touch relationships").
+ * Async — needs a Supabase client.
  */
-export function validateProductIds(rawIds) {
+export async function validateProductIds(rawIds, supabase) {
   if (rawIds === undefined) return { issues: [], productIds: undefined }
   if (!Array.isArray(rawIds)) return { issues: ['productIds must be an array.'], productIds: [] }
 
   const ids = [...new Set(rawIds.map((v) => str(v)).filter(Boolean))]
-  const invalid = ids.filter((id) => !CATALOGUE_PRODUCT_IDS.has(id))
+  if (ids.length === 0) return { issues: [], productIds: [] }
+
+  const { data, error } = await supabase.from('products').select('slug').neq('slug', 'test-product')
+  if (error) return { issues: ['Could not verify the selected products.'], productIds: ids }
+
+  const known = new Set((data ?? []).map((r) => r.slug))
+  const invalid = ids.filter((id) => !known.has(id))
   const issues = invalid.length ? [`Unknown product id(s): ${invalid.join(', ')}.`] : []
   return { issues, productIds: ids }
 }

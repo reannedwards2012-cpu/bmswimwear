@@ -123,20 +123,11 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { products as catalogueProducts } from '~/data/products.js'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
 useHead({ title: 'Fabric inventory — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
 
 const { getAccessToken } = useAuth()
-
-// Real catalogue products only — the temporary Go2Pay test product is
-// excluded, matching the server-side validation. `category` lets the form
-// group the compatibility checklist by Tops/Bottoms/One Pieces/Cover Ups.
-const productOptions = catalogueProducts
-  .filter((p) => p.id !== 'test-product')
-  .map((p) => ({ id: p.id, title: p.title, category: p.category }))
-const productTitle = (id) => productOptions.find((p) => p.id === id)?.title ?? id
 
 async function authedFetch(url, opts = {}) {
   const token = await getAccessToken()
@@ -154,6 +145,19 @@ const {
 } = useLazyAsyncData('admin-fabrics', () => authedFetch('/api/admin/fabrics'), { server: false })
 
 const fabrics = computed(() => data.value?.fabrics ?? [])
+
+// Product-compatibility options — the live Supabase catalogue (Phase C).
+// The Test Product is excluded, matching the server-side validation. `id`
+// here is the product SLUG (what product_fabrics.product_id stores).
+const { data: productData } = useLazyAsyncData('admin-fabrics-products', () => authedFetch('/api/admin/products'), {
+  server: false
+})
+const productOptions = computed(() =>
+  (productData.value?.products ?? [])
+    .filter((p) => p.slug !== 'test-product')
+    .map((p) => ({ id: p.slug, title: p.name, category: p.category }))
+)
+const productTitle = (id) => productOptions.value.find((p) => p.id === id)?.title ?? id
 
 const STATUS_STYLES = {
   available: 'bg-shell text-ink/70',

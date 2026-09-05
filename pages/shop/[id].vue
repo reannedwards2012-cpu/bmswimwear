@@ -42,7 +42,7 @@
           <span class="rounded-full bg-blush/25 px-4 py-1.5 text-base font-semibold text-ink">
             USD {{ product.priceFormatted }}
           </span>
-          <p class="mt-2 text-xs text-ink/50">Made to order · {{ product.turnaround }}</p>
+          <p class="mt-2 text-xs text-ink/50">Made to order · {{ turnaround }}</p>
         </div>
 
         <p v-if="product.description" class="mt-6 leading-relaxed text-ink/70">{{ product.description }}</p>
@@ -124,17 +124,29 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { getProductById, getRelatedProducts } from '~/data/products.js'
+import { MADE_TO_ORDER } from '~/data/constants.js'
 
 // Re-mount the page when navigating between products (e.g. via "You may also like").
 definePageMeta({ key: (route) => route.fullPath })
 
 const route = useRoute()
-const product = getProductById(route.params.id)
 
-if (!product) {
+// Supabase-backed product detail (Phase C). SSR-safe. 404s for a missing OR
+// inactive product. Colour options + related products are embedded in this
+// one response — no second request. (The standalone
+// /api/products/:productId/fabrics endpoint is unchanged and still available.)
+const { data: detail, error: detailError } = await useFetch(
+  `/api/products/${encodeURIComponent(route.params.id)}`,
+  { key: `product-detail-${route.params.id}` }
+)
+
+if (detailError.value || !detail.value?.product) {
   throw createError({ statusCode: 404, statusMessage: 'Product not found', fatal: true })
 }
+
+const product = detail.value.product
+const related = computed(() => detail.value?.related ?? [])
+const turnaround = MADE_TO_ORDER.turnaround
 
 useHead({ title: `${product.title} — Bahama Mama Swimwear` })
 
@@ -142,41 +154,16 @@ const activeIndex = ref(0)
 const activeImage = computed(() => product.images[activeIndex.value] ?? product.image)
 
 // No option is pre-selected — the customer makes an intentional choice.
-// `selectedColour` stores the fabric id (e.g. 'royal-blue'), not the display
-// name, so it maps straight onto the shared fabric inventory later.
+// `selectedColour` stores the fabric slug (e.g. 'royal-blue'), the shared
+// fabric-inventory id.
 const selectedColour = ref(null)
 const selectedSize = ref(null)
 const selectedCoverage = ref(null)
 
-// Fallback colour list — the static data/products.js colours, all treated as
-// available. Used only when the live fabric API is unreachable.
-const colourFallback = computed(() =>
-  product.colours.map((c) => ({ id: c.id, name: c.name, hex: c.hex, status: 'available' }))
-)
-
-// Live fabric availability from Supabase (product_fabrics + fabrics), with a
-// fallback to the catalogue's static colour list if the API call fails. Only
-// products that have colours in the catalogue call the API at all — a
-// product with none (e.g. a kaftan) never fetches and never shows a colour
-// selector, unchanged from before.
-//
-// Important: a *successful* response is authoritative even when its fabrics
-// array is empty (a product legitimately not yet linked to any fabric) — that
-// case must NOT fall back to the hardcoded list. Only an actual request
-// failure (thrown/non-2xx, surfaced as `fabricsError`) falls back.
-const { data: fabricsResponse, error: fabricsError } = await useAsyncData(
-  `product-fabrics-${product.id}`,
-  () => $fetch(`/api/products/${encodeURIComponent(product.id)}/fabrics`),
-  { immediate: product.colours.length > 0 }
-)
-
-const colourOptions = computed(() => {
-  if (!product.colours.length) return []
-  if (!fabricsError.value && Array.isArray(fabricsResponse.value?.fabrics)) {
-    return fabricsResponse.value.fabrics
-  }
-  return colourFallback.value
-})
+// Colour options come straight from the detail response — already filtered
+// to active fabrics on an available relationship; an 'unavailable'-status
+// fabric is still listed (shown disabled by ProductOptionGroup).
+const colourOptions = computed(() => product.colours ?? [])
 
 // Which options this specific product actually offers → which are required.
 const requiredOptions = computed(() => {
@@ -230,6 +217,4 @@ function onAddToCart() {
   showErrors.value = false
   openDrawer()
 }
-
-const related = computed(() => getRelatedProducts(product, 3))
 </script>

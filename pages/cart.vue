@@ -107,7 +107,7 @@
 </template>
 
 <script setup>
-import { MADE_TO_ORDER } from '~/data/products.js'
+import { MADE_TO_ORDER } from '~/data/constants.js'
 import { formatUsd } from '~/utils/money'
 
 useHead({ title: 'Shopping Cart — Bahama Mama Swimwear' })

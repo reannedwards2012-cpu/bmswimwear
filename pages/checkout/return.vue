@@ -29,7 +29,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { MADE_TO_ORDER } from '~/data/products.js'
+import { MADE_TO_ORDER } from '~/data/constants.js'
 import { useCheckout } from '~/composables/useCheckout'
 
 useHead({ title: 'Payment received — Bahama Mama Swimwear' })
