@@ -1,5 +1,7 @@
 <template>
   <div class="section container-bm">
+    <AdminNav active="fabrics" class="mb-4" />
+
     <div class="flex flex-wrap items-center justify-between gap-4">
       <FancyHeading eyebrow="Admin" title="Fabric *inventory*" size="sm" as="h1" />
       <button type="button" class="btn-primary" @click="openCreate">Add fabric</button>
