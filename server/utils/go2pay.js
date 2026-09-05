@@ -73,7 +73,8 @@ async function apiFetch(path, options = {}, _retried = false) {
 /**
  * POST /requests — create a one-time hosted Payment Request.
  * `payload` must use only documented fields:
- *   name, email, amount, phone, description, endpoint, success_url, error_url, send_email
+ *   name, email, amount, phone, description, endpoint, success_url, error_url,
+ *   send_email, send_receipt
  * Returns the `data` object: { id, payment_url, title, price, email, email_sent }.
  */
 export async function createPaymentRequest(payload) {

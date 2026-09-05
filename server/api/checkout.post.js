@@ -234,7 +234,8 @@ export default defineEventHandler(async (event) => {
         endpoint: `${base}/api/payments/go2pay/${order.payment_callback_token}`,
         success_url: `${base}/checkout/return?o=${encodeURIComponent(displayOrderNumber)}`,
         error_url: `${base}/checkout/cancelled`,
-        send_email: false
+        send_email: false,
+        send_receipt: true
       })
     } catch (err) {
       console.error('[checkout] Go2Pay create-request failed for order', order.id, '—', err.message)
