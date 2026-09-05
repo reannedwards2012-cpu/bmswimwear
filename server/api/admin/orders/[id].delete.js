@@ -3,7 +3,8 @@
  *
  * Admin-only, permanent — MANUAL orders only. A website order can NEVER be
  * hard-deleted through this endpoint (400), independent of the UI: website
- * orders (especially paid Go2Pay ones) use cancellation / status management.
+ * orders (especially paid Go2Pay ones) use Archive
+ * (PATCH /api/admin/orders/:id/archive) / cancellation / status management.
  *
  * Deleting a manual order:
  *  - removes its order_items via ON DELETE CASCADE (verified)
@@ -50,7 +51,7 @@ export default defineEventHandler(async (event) => {
     // Hard rule, independent of the UI: website orders are never hard-deleted.
     if (!isManualSource(order.source)) {
       setResponseStatus(event, 400)
-      return { error: 'Website orders can’t be deleted. Cancel the order instead.' }
+      return { error: 'Website orders can’t be deleted. Archive the order instead.' }
     }
 
     const storagePaths = (order.order_items ?? [])

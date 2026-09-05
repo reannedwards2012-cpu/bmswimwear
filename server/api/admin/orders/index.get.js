@@ -1,5 +1,5 @@
 /**
- * GET /api/admin/orders?status=&period=&search=&source=
+ * GET /api/admin/orders?status=&period=&search=&source=&archived=
  *
  * Admin-only. Returns a safe list of orders (newest first), optionally
  * filtered by status, a created_at date period, a search term, and/or the
@@ -12,10 +12,18 @@
  * Overview dashboard's analytics, which use `paid_at`; see
  * server/api/admin/dashboard.get.js). An admin browsing here wants to find
  * an order regardless of whether/when it was ever paid.
+ *
+ * `archived=1` switches to the "Archived" view: website orders with
+ * `archived_at IS NOT NULL`. The default view excludes those. `statusCounts`
+ * is always computed over whichever set is active — never mixed.
  */
 import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../utils/authUser.js'
-import { ORDER_STATUSES, ADMIN_VISIBLE_ORDERS_OR_FILTER } from '../../../utils/orderStatus.js'
+import {
+  ORDER_STATUSES,
+  ADMIN_ACTIVE_ORDERS_OR_FILTER,
+  HIDDEN_WEBSITE_STATUSES
+} from '../../../utils/orderStatus.js'
 import { ORDER_LIST_SELECT, mapOrderListItem } from '../../../utils/orderMappers.js'
 import { PERIODS, getPeriodRange } from '../../../utils/dashboardPeriod.js'
 import { buildOrderSearchFilter } from '../../../utils/orderSearch.js'
@@ -34,6 +42,7 @@ export default defineEventHandler(async (event) => {
   const period = typeof query.period === 'string' && query.period ? query.period : 'all'
   const rawSearch = typeof query.search === 'string' ? query.search : ''
   const sourceFilter = typeof query.source === 'string' && query.source ? query.source : 'all'
+  const archivedView = query.archived === '1' || query.archived === 'true'
 
   if (statusFilter && !ORDER_STATUSES.includes(statusFilter)) {
     setResponseStatus(event, 400)
@@ -53,19 +62,30 @@ export default defineEventHandler(async (event) => {
     const range = period === 'all' ? null : getPeriodRange(period)
     const search = buildOrderSearchFilter(rawSearch) // null for an empty/whitespace-only term
 
-    // Shared by both queries below so the date/search/source scope — AND the
-    // admin-visibility rule — can never drift between the list and the status
-    // counts. Only the status filter and the selected columns differ.
+    // Shared by both queries below so the base set / date / search / source
+    // scope can never drift between the list and the status counts. Only the
+    // status filter and the selected columns differ.
     //
-    // The visibility `.or()` hides abandoned website checkout attempts
-    // (`source='website'` AND status pending/payment_failed). Chained `.or()`
-    // calls are AND-ed by PostgREST, so this composes correctly with the
-    // search `.or()` — a hidden row is never surfaced by a name/phone match.
+    //  - Default view: ADMIN_ACTIVE_ORDERS_OR_FILTER — hides abandoned website
+    //    checkouts (pending/payment_failed) AND archived website orders.
+    //  - Archived view: website + archived_at IS NOT NULL + not an abandoned
+    //    checkout. `source` filter is irrelevant here (always website).
+    //
+    // Chained `.or()` calls are AND-ed by PostgREST, so the base `.or()`
+    // composes correctly with the search `.or()` — a hidden/archived row is
+    // never surfaced by a name/phone match.
     const applyShared = (q) => {
-      q = q.or(ADMIN_VISIBLE_ORDERS_OR_FILTER)
+      if (archivedView) {
+        q = q
+          .eq('source', 'website')
+          .not('archived_at', 'is', null)
+          .not('status', 'in', `(${HIDDEN_WEBSITE_STATUSES.join(',')})`)
+      } else {
+        q = q.or(ADMIN_ACTIVE_ORDERS_OR_FILTER)
+        if (sourceFilter !== 'all') q = q.eq('source', sourceFilter)
+      }
       if (range) q = q.gte('created_at', range.start.toISOString()).lt('created_at', range.end.toISOString())
       if (search) q = q.or(search.orClause)
-      if (sourceFilter !== 'all') q = q.eq('source', sourceFilter)
       return q
     }
 
@@ -104,7 +124,14 @@ export default defineEventHandler(async (event) => {
       orders,
       count: orders.length,
       statusCounts,
-      filters: { status: statusFilter || null, period, search: search?.term ?? null, source: sourceFilter }
+      archivedView,
+      filters: {
+        status: statusFilter || null,
+        period,
+        search: search?.term ?? null,
+        source: archivedView ? 'website' : sourceFilter,
+        archived: archivedView
+      }
     }
   } catch (err) {
     console.error('[admin/orders] unexpected error:', err?.message)

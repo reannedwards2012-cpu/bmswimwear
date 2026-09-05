@@ -61,7 +61,17 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-ink/10">
-              <tr v-for="q in inquiries" :key="q.id" :class="q.status === 'new' ? 'bg-coral/[0.03]' : ''">
+              <tr
+                v-for="q in inquiries"
+                :key="q.id"
+                tabindex="0"
+                role="link"
+                :aria-label="`Open inquiry from ${fullName(q)}`"
+                class="cursor-pointer transition-colors hover:bg-shell/50 focus-visible:bg-shell/60 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-coral"
+                :class="q.status === 'new' ? 'bg-coral/[0.03]' : ''"
+                @click="rowActivate($event, () => openInquiry(q))"
+                @keydown="rowKeydown($event, () => openInquiry(q))"
+              >
                 <td class="px-5 py-4">
                   <p class="font-medium text-ink" :class="q.status === 'new' ? 'font-semibold' : ''">{{ fullName(q) }}</p>
                   <p class="text-xs text-ink/40">{{ q.email }}</p>
@@ -74,7 +84,16 @@
                 <td class="px-5 py-4 whitespace-nowrap text-ink/60">{{ formatDate(q.createdAt) }}</td>
                 <td class="px-5 py-4"><AdminInquiryStatusBadge :status="q.status" /></td>
                 <td class="px-5 py-4 text-right">
-                  <NuxtLink :to="`/admin/inquiries/${q.id}`" class="text-xs font-semibold text-coral link-underline">Open</NuxtLink>
+                  <button
+                    data-row-action
+                    type="button"
+                    class="text-ink/35 transition-colors hover:text-coral"
+                    :aria-label="`Delete inquiry from ${fullName(q)}`"
+                    :title="`Delete inquiry from ${fullName(q)}`"
+                    @click.stop="deleteTarget = q"
+                  >
+                    <IconTrash class="h-4 w-4" />
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -83,7 +102,16 @@
 
         <!-- mobile cards -->
         <ul class="mt-3 space-y-4 md:hidden">
-          <li v-for="q in inquiries" :key="q.id" class="rounded-4xl bg-cream p-5 shadow-card">
+          <li
+            v-for="q in inquiries"
+            :key="q.id"
+            tabindex="0"
+            role="link"
+            :aria-label="`Open inquiry from ${fullName(q)}`"
+            class="cursor-pointer rounded-4xl bg-cream p-5 shadow-card transition-shadow hover:shadow-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-coral"
+            @click="rowActivate($event, () => openInquiry(q))"
+            @keydown="rowKeydown($event, () => openInquiry(q))"
+          >
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <p class="font-display text-base font-semibold text-ink">{{ fullName(q) }}</p>
@@ -95,7 +123,16 @@
             <p class="mt-2 line-clamp-3 text-sm text-ink/60">{{ q.messagePreview }}</p>
             <div class="mt-3 flex items-center justify-between">
               <span class="text-xs text-ink/40">{{ formatDate(q.createdAt) }}</span>
-              <NuxtLink :to="`/admin/inquiries/${q.id}`" class="btn-outline px-4 py-1.5 text-xs">Open</NuxtLink>
+              <button
+                data-row-action
+                type="button"
+                class="inline-flex h-9 items-center gap-1.5 rounded-full border border-ink/15 px-4 text-xs font-semibold text-ink/60 hover:border-coral hover:text-coral"
+                :aria-label="`Delete inquiry from ${fullName(q)}`"
+                @click.stop="deleteTarget = q"
+              >
+                <IconTrash class="h-4 w-4" />
+                <span>Delete</span>
+              </button>
             </div>
           </li>
         </ul>
@@ -107,11 +144,40 @@
         </div>
       </template>
     </template>
+
+    <!-- hard-delete confirm (spam / test inquiries) -->
+    <div
+      v-if="deleteTarget"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6 backdrop-blur-sm"
+      @click.self="deleteTarget = null"
+    >
+      <div class="w-full max-w-sm rounded-4xl bg-cream p-7 shadow-card">
+        <h2 class="font-display text-lg font-semibold text-ink">Delete this inquiry?</h2>
+        <p class="mt-2 text-sm text-ink/60">
+          The message from <span class="font-semibold text-ink">{{ fullName(deleteTarget) }}</span>
+          ({{ formatDate(deleteTarget.createdAt) }}) will be permanently removed. This can’t be undone.
+        </p>
+        <p v-if="deleteError" class="mt-3 text-xs text-coral">{{ deleteError }}</p>
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <button type="button" class="btn-outline" :disabled="deleting" @click="deleteTarget = null">Keep it</button>
+          <button
+            type="button"
+            class="rounded-full bg-coral px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="deleting"
+            @click="doDelete"
+          >
+            {{ deleting ? 'Deleting…' : 'Delete inquiry' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { rowActivate, rowKeydown } from '~/utils/adminRowClick.js'
+import IconTrash from '~/components/IconTrash.vue'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
 useHead({ title: 'Inquiries — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
@@ -119,6 +185,10 @@ useHead({ title: 'Inquiries — Admin — Bahama Mama Swimwear', meta: [{ name: 
 const { getAccessToken } = useAuth()
 const route = useRoute()
 const router = useRouter()
+
+function openInquiry(q) {
+  navigateTo(`/admin/inquiries/${q.id}`)
+}
 
 async function authedFetch(url, opts = {}) {
   const token = await getAccessToken()
@@ -217,6 +287,27 @@ function filterCount(value) {
 }
 
 const fullName = (q) => [q.firstName, q.lastName].filter(Boolean).join(' ') || '—'
+
+// ── hard delete (spam / test) — existing DELETE endpoint, list-level confirm ──
+const deleteTarget = ref(null)
+const deleting = ref(false)
+const deleteError = ref('')
+
+async function doDelete() {
+  if (!deleteTarget.value) return
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await authedFetch(`/api/admin/inquiries/${deleteTarget.value.id}`, { method: 'DELETE' })
+    deleteTarget.value = null
+    extraPages.value = []
+    await refresh()
+  } catch (err) {
+    deleteError.value = err?.data?.error || 'Could not delete this inquiry. Please try again.'
+  } finally {
+    deleting.value = false
+  }
+}
 
 function formatDate(iso) {
   try {

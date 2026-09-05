@@ -35,7 +35,16 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-ink/10">
-          <tr v-for="f in fabrics" :key="f.id">
+          <tr
+            v-for="f in fabrics"
+            :key="f.id"
+            tabindex="0"
+            role="button"
+            :aria-label="`Edit ${f.name}`"
+            class="cursor-pointer transition-colors hover:bg-shell/50 focus-visible:bg-shell/60 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-coral"
+            @click="rowActivate($event, () => openEdit(f))"
+            @keydown="rowKeydown($event, () => openEdit(f))"
+          >
             <td class="px-5 py-4">
               <div class="flex items-center gap-3">
                 <img v-if="f.imageUrl" :src="f.imageUrl" :alt="f.name" class="h-8 w-8 shrink-0 rounded-full object-cover" />
@@ -65,18 +74,16 @@
               <span v-else class="text-ink/30">Not linked to any product</span>
             </td>
             <td class="px-5 py-4 text-right">
-              <div class="flex flex-col items-end gap-2">
-                <button type="button" class="text-xs font-semibold text-coral link-underline" @click="openEdit(f)">Edit</button>
-                <button
-                  type="button"
-                  class="text-ink/35 transition-colors hover:text-coral"
-                  :aria-label="`Delete ${f.name}`"
-                  :title="`Delete ${f.name}`"
-                  @click="confirmDelete(f)"
-                >
-                  <IconTrash class="h-4 w-4" />
-                </button>
-              </div>
+              <button
+                data-row-action
+                type="button"
+                class="text-ink/35 transition-colors hover:text-coral"
+                :aria-label="`Delete ${f.name}`"
+                :title="`Delete ${f.name}`"
+                @click.stop="confirmDelete(f)"
+              >
+                <IconTrash class="h-4 w-4" />
+              </button>
             </td>
           </tr>
         </tbody>
@@ -125,6 +132,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { rowActivate, rowKeydown } from '~/utils/adminRowClick.js'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
 useHead({ title: 'Fabric inventory — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })

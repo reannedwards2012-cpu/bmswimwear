@@ -18,6 +18,12 @@
           <div class="flex items-center gap-3">
             <h1 class="font-display text-2xl font-semibold text-ink md:text-3xl">{{ order.orderNumber }}</h1>
             <SourceBadge :source="order.source" />
+            <span
+              v-if="order.archivedAt"
+              class="rounded-full bg-ink/10 px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-widest2 text-ink/55"
+            >
+              Archived
+            </span>
           </div>
           <p class="mt-1 text-sm text-ink/50">{{ formatDate(order.createdAt) }}</p>
         </div>
@@ -25,6 +31,8 @@
           <span class="rounded-full px-4 py-1.5 text-xs font-semibold" :class="statusClass(order.status)">
             {{ statusLabel(order.status) }}
           </span>
+
+          <!-- manual: permanent delete -->
           <button
             v-if="isManual"
             type="button"
@@ -34,6 +42,29 @@
             @click="confirmDelete = true"
           >
             <IconTrash class="h-5 w-5" />
+          </button>
+
+          <!-- website: archive / restore (reversible, sets only archived_at) -->
+          <button
+            v-else-if="order.archivedAt"
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-full border border-ink/15 px-3 py-1.5 text-xs font-semibold text-ink/60 transition-colors hover:border-coral hover:text-coral disabled:opacity-60"
+            :disabled="archiving"
+            :aria-label="`Restore ${order.orderNumber}`"
+            @click="setArchived(false)"
+          >
+            <IconRestore class="h-4 w-4" />
+            {{ archiving ? 'Restoring…' : 'Restore' }}
+          </button>
+          <button
+            v-else
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-full border border-ink/15 px-3 py-1.5 text-xs font-semibold text-ink/60 transition-colors hover:border-coral hover:text-coral"
+            :aria-label="`Archive ${order.orderNumber}`"
+            @click="confirmArchive = true"
+          >
+            <IconArchive class="h-4 w-4" />
+            Archive
           </button>
         </div>
       </div>
@@ -263,12 +294,41 @@
         </div>
       </div>
     </div>
+
+    <!-- archive confirm — website orders only, reversible -->
+    <div
+      v-if="confirmArchive"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6 backdrop-blur-sm"
+      @click.self="confirmArchive = false"
+    >
+      <div class="w-full max-w-sm rounded-4xl bg-cream p-7 shadow-card">
+        <h2 class="font-display text-lg font-semibold text-ink">Archive {{ order?.orderNumber }}?</h2>
+        <p class="mt-2 text-sm text-ink/60">
+          It moves out of the working Orders list into <span class="font-semibold text-ink">Archived</span>. Nothing about
+          the order changes and it still counts in your sales analytics. You can restore it any time.
+        </p>
+        <p v-if="archiveError" class="mt-3 text-xs text-coral">{{ archiveError }}</p>
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <button type="button" class="btn-outline" :disabled="archiving" @click="confirmArchive = false">Cancel</button>
+          <button
+            type="button"
+            class="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="archiving"
+            @click="setArchived(true)"
+          >
+            {{ archiving ? 'Archiving…' : 'Archive order' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { formatMoney } from '~/utils/money'
+import IconArchive from '~/components/IconArchive.vue'
+import IconRestore from '~/components/IconRestore.vue'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
 
@@ -485,6 +545,31 @@ async function doDelete() {
   } catch (err) {
     deleteError.value = err?.data?.error || 'Could not delete this order. Please try again.'
     deleting.value = false
+  }
+}
+
+// Archive / restore — website orders only. Sets ONLY archived_at server-side;
+// never a status, never a hard delete. Archive gets a light confirm; restore
+// is immediate.
+const confirmArchive = ref(false)
+const archiving = ref(false)
+const archiveError = ref('')
+
+async function setArchived(archived) {
+  archiving.value = true
+  archiveError.value = ''
+  try {
+    const res = await authedFetch(`/api/admin/orders/${route.params.id}/archive`, {
+      method: 'PATCH',
+      body: { archived }
+    })
+    if (res?.order) data.value = { order: res.order }
+    else await refresh()
+    confirmArchive.value = false
+  } catch (err) {
+    archiveError.value = err?.data?.error || 'Could not update this order. Please try again.'
+  } finally {
+    archiving.value = false
   }
 }
 </script>

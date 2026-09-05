@@ -38,7 +38,7 @@
  */
 import { supabaseAdmin } from '../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../utils/authUser.js'
-import { SALES_QUALIFYING_STATUSES, ADMIN_VISIBLE_ORDERS_OR_FILTER } from '../../utils/orderStatus.js'
+import { SALES_QUALIFYING_STATUSES, ADMIN_ACTIVE_ORDERS_OR_FILTER } from '../../utils/orderStatus.js'
 import { ORDER_LIST_SELECT, mapOrderListItem } from '../../utils/orderMappers.js'
 import { PERIODS, getPeriodRange, buildTrendBuckets } from '../../utils/dashboardPeriod.js'
 
@@ -75,13 +75,14 @@ export default defineEventHandler(async (event) => {
         .lt('paid_at', range.end.toISOString()),
       // Recent orders — independent of period/status, newest first, keyed
       // on created_at (operational "what just happened", not analytics).
-      // Follows the same admin-visibility rule as Order Management: abandoned
-      // website checkout attempts (pending/payment_failed website rows) are
-      // not "recent orders" and must not appear or bump a real one off the list.
+      // Follows the same default admin-list rule as Order Management: abandoned
+      // website checkout attempts AND archived website orders are excluded and
+      // must not appear or bump a real one off the list. (Archive is presentation
+      // only — archived paid orders still count in the sales analytics below.)
       supabase
         .from('orders')
         .select(ORDER_LIST_SELECT)
-        .or(ADMIN_VISIBLE_ORDERS_OR_FILTER)
+        .or(ADMIN_ACTIVE_ORDERS_OR_FILTER)
         .order('created_at', { ascending: false })
         .limit(RECENT_ORDERS_LIMIT),
       // ANOMALY CHECK — global, not period-scoped: a qualifying-status order

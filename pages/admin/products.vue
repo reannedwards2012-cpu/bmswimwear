@@ -71,7 +71,16 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-ink/10">
-            <tr v-for="p in filtered" :key="p.id">
+            <tr
+              v-for="p in filtered"
+              :key="p.id"
+              tabindex="0"
+              role="button"
+              :aria-label="`Edit ${p.name}`"
+              class="cursor-pointer transition-colors hover:bg-shell/50 focus-visible:bg-shell/60 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-coral"
+              @click="rowActivate($event, () => openEdit(p))"
+              @keydown="rowKeydown($event, () => openEdit(p))"
+            >
               <td class="px-5 py-4">
                 <div class="flex items-center gap-3">
                   <span class="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-ink/10 bg-sand/40">
@@ -90,18 +99,16 @@
                 <span :class="p.isActive ? 'text-ink/70' : 'text-ink/30'">{{ p.isActive ? 'Active' : 'Inactive' }}</span>
               </td>
               <td class="px-5 py-4 text-right">
-                <div class="flex flex-col items-end gap-2">
-                  <button type="button" class="text-xs font-semibold text-coral link-underline" @click="openEdit(p)">Edit</button>
-                  <button
-                    type="button"
-                    class="text-ink/35 transition-colors hover:text-coral"
-                    :aria-label="`Delete ${p.name}`"
-                    :title="`Delete ${p.name}`"
-                    @click="deleteTarget = p"
-                  >
-                    <IconTrash class="h-4 w-4" />
-                  </button>
-                </div>
+                <button
+                  data-row-action
+                  type="button"
+                  class="text-ink/35 transition-colors hover:text-coral"
+                  :aria-label="`Delete ${p.name}`"
+                  :title="`Delete ${p.name}`"
+                  @click.stop="deleteTarget = p"
+                >
+                  <IconTrash class="h-4 w-4" />
+                </button>
               </td>
             </tr>
           </tbody>
@@ -152,6 +159,7 @@
 import { computed, ref } from 'vue'
 import { formatUsd } from '~/utils/money'
 import { CATEGORIES } from '~/data/constants.js'
+import { rowActivate, rowKeydown } from '~/utils/adminRowClick.js'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
 useHead({ title: 'Products — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })

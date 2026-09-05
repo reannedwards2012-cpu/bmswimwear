@@ -2,11 +2,25 @@
   <div>
     <div class="flex flex-wrap items-center justify-between gap-4">
       <FancyHeading eyebrow="Admin" title="Order *Management*" size="sm" as="h1" />
-      <NuxtLink to="/admin/orders/new" class="btn-primary">Add Order</NuxtLink>
+      <NuxtLink v-if="!archivedView" to="/admin/orders/new" class="btn-primary">Add Order</NuxtLink>
+    </div>
+
+    <!-- active / archived view toggle -->
+    <div class="mt-5 flex gap-2">
+      <button
+        v-for="v in VIEW_TABS"
+        :key="v.value"
+        type="button"
+        class="rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-widest2 transition-colors"
+        :class="(v.value === 'archived') === archivedView ? 'border-ink bg-ink text-cream' : 'border-ink/15 text-ink/60 hover:border-ink/40'"
+        @click="archivedView = v.value === 'archived'"
+      >
+        {{ v.label }}
+      </button>
     </div>
 
     <!-- filters -->
-    <div class="mt-6 space-y-4">
+    <div class="mt-4 space-y-4">
       <!-- search + period, side by side on desktop, stacked on mobile -->
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div class="relative flex-1 sm:max-w-xs">
@@ -52,8 +66,8 @@
         </button>
       </div>
 
-      <!-- source filter -->
-      <div class="scrollbar-hide flex gap-2 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible">
+      <!-- source filter — not shown in the Archived view (always website) -->
+      <div v-if="!archivedView" class="scrollbar-hide flex gap-2 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible">
         <button
           v-for="s in SOURCE_FILTERS"
           :key="s.value"
@@ -81,7 +95,7 @@
       </p>
 
       <div v-if="!orders.length" class="mt-3 rounded-4xl bg-cream p-8 text-center shadow-card">
-        <p class="text-sm text-ink/70">{{ hasActiveFilters ? 'No orders match these filters.' : 'No orders yet.' }}</p>
+        <p class="text-sm text-ink/70">{{ emptyMessage }}</p>
         <button v-if="hasActiveFilters" type="button" class="btn-outline mt-5" @click="clearFilters">Clear filters</button>
       </div>
 
@@ -101,7 +115,16 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-ink/10">
-              <tr v-for="o in orders" :key="o.id">
+              <tr
+                v-for="o in orders"
+                :key="o.id"
+                tabindex="0"
+                role="link"
+                :aria-label="`Open order ${o.orderNumber}`"
+                class="cursor-pointer transition-colors hover:bg-shell/50 focus-visible:bg-shell/60 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-coral"
+                @click="rowActivate($event, () => openOrder(o))"
+                @keydown="rowKeydown($event, () => openOrder(o))"
+              >
                 <td class="px-5 py-4 font-medium text-ink">{{ o.orderNumber }}</td>
                 <td class="px-5 py-4"><SourceBadge :source="o.source" /></td>
                 <td class="px-5 py-4 text-ink/70">{{ formatDate(o.createdAt) }}</td>
@@ -117,16 +140,17 @@
                 </td>
                 <td class="px-5 py-4 text-right">
                   <div class="flex items-center justify-end gap-3">
-                    <NuxtLink :to="`/admin/orders/${o.id}`" class="text-xs font-semibold text-coral link-underline">View</NuxtLink>
                     <button
-                      v-if="o.source !== 'website'"
+                      v-for="act in rowActions(o)"
+                      :key="act.kind"
+                      data-row-action
                       type="button"
                       class="text-ink/35 transition-colors hover:text-coral"
-                      :aria-label="`Delete ${o.orderNumber}`"
-                      :title="`Delete ${o.orderNumber}`"
-                      @click="deleteTarget = o"
+                      :aria-label="act.label"
+                      :title="act.label"
+                      @click.stop="act.run(o)"
                     >
-                      <IconTrash class="h-4 w-4" />
+                      <component :is="act.icon" class="h-4 w-4" />
                     </button>
                   </div>
                 </td>
@@ -137,7 +161,16 @@
 
         <!-- mobile cards -->
         <ul class="mt-3 space-y-4 md:hidden">
-          <li v-for="o in orders" :key="o.id" class="rounded-4xl bg-cream p-5 shadow-card">
+          <li
+            v-for="o in orders"
+            :key="o.id"
+            tabindex="0"
+            role="link"
+            :aria-label="`Open order ${o.orderNumber}`"
+            class="cursor-pointer rounded-4xl bg-cream p-5 shadow-card transition-shadow hover:shadow-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-coral"
+            @click="rowActivate($event, () => openOrder(o))"
+            @keydown="rowKeydown($event, () => openOrder(o))"
+          >
             <div class="flex items-start justify-between gap-3">
               <div>
                 <p class="font-display text-base font-semibold text-ink">{{ o.orderNumber }}</p>
@@ -158,16 +191,18 @@
               <span class="text-ink/60">{{ o.deliveryMethod === 'shipping' ? 'Delivery' : 'Pickup' }}</span>
               <span class="font-semibold text-ink">{{ orderTotal(o) }}</span>
             </div>
-            <div class="mt-4 flex gap-2">
-              <NuxtLink :to="`/admin/orders/${o.id}`" class="btn-outline flex-1 text-center">View order</NuxtLink>
+            <div v-if="rowActions(o).length" class="mt-4 flex justify-end gap-2">
               <button
-                v-if="o.source !== 'website'"
+                v-for="act in rowActions(o)"
+                :key="act.kind"
+                data-row-action
                 type="button"
-                class="grid w-11 shrink-0 place-items-center rounded-full border border-ink/15 text-ink/40 hover:border-coral hover:text-coral"
-                :aria-label="`Delete ${o.orderNumber}`"
-                @click="deleteTarget = o"
+                class="inline-flex h-9 items-center gap-1.5 rounded-full border border-ink/15 px-4 text-xs font-semibold text-ink/60 hover:border-coral hover:text-coral"
+                :aria-label="act.label"
+                @click.stop="act.run(o)"
               >
-                <IconTrash class="h-4 w-4" />
+                <component :is="act.icon" class="h-4 w-4" />
+                <span>{{ act.short }}</span>
               </button>
             </div>
           </li>
@@ -201,12 +236,43 @@
         </div>
       </div>
     </div>
+
+    <!-- website order archive confirm (reversible) -->
+    <div
+      v-if="archiveTarget"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6 backdrop-blur-sm"
+      @click.self="archiveTarget = null"
+    >
+      <div class="w-full max-w-sm rounded-4xl bg-cream p-7 shadow-card">
+        <h2 class="font-display text-lg font-semibold text-ink">Archive {{ archiveTarget.orderNumber }}?</h2>
+        <p class="mt-2 text-sm text-ink/60">
+          It moves out of the working Orders list into <span class="font-semibold text-ink">Archived</span>. Nothing about
+          the order changes and it still counts in your sales analytics. You can restore it any time.
+        </p>
+        <p v-if="archiveError" class="mt-3 text-sm text-coral">{{ archiveError }}</p>
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <button type="button" class="btn-outline" :disabled="archiving" @click="archiveTarget = null">Cancel</button>
+          <button
+            type="button"
+            class="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="archiving"
+            @click="doArchive"
+          >
+            {{ archiving ? 'Archiving…' : 'Archive order' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { formatMoney } from '~/utils/money'
+import { rowActivate, rowKeydown } from '~/utils/adminRowClick.js'
+import IconTrash from '~/components/IconTrash.vue'
+import IconArchive from '~/components/IconArchive.vue'
+import IconRestore from '~/components/IconRestore.vue'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
 useHead({ title: 'Orders — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
@@ -214,6 +280,11 @@ useHead({ title: 'Orders — Admin — Bahama Mama Swimwear', meta: [{ name: 'ro
 const { getAccessToken } = useAuth()
 const route = useRoute()
 const router = useRouter()
+
+const VIEW_TABS = [
+  { value: 'active', label: 'Active' },
+  { value: 'archived', label: 'Archived' }
+]
 
 const customerName = (o) => [o.firstName, o.lastName].filter(Boolean).join(' ') || '—'
 const orderTotal = (o) =>
@@ -261,10 +332,12 @@ const initialStatus = typeof route.query.status === 'string' && VALID_STATUS_VAL
 const initialPeriod = typeof route.query.period === 'string' && VALID_PERIOD_VALUES.includes(route.query.period) ? route.query.period : 'all'
 const initialSearch = typeof route.query.search === 'string' ? route.query.search : ''
 const initialSource = typeof route.query.source === 'string' && VALID_SOURCE_VALUES.includes(route.query.source) ? route.query.source : 'all'
+const initialArchived = route.query.archived === '1' || route.query.archived === 'true'
 
 const activeFilter = ref(initialStatus)
 const period = ref(initialPeriod)
 const sourceFilter = ref(initialSource)
+const archivedView = ref(initialArchived)
 // searchInput is bound to the text field directly (updates every
 // keystroke); `search` is the debounced value actually sent to the API and
 // synced to the URL, so typing doesn't fire a request (or a URL update) on
@@ -282,12 +355,13 @@ watch(searchInput, (val) => {
 
 // Keep the URL in sync (replace, not push, so debounced typing doesn't spam
 // browser history) whenever the effective filter state changes.
-watch([activeFilter, period, search, sourceFilter], () => {
+watch([activeFilter, period, search, sourceFilter, archivedView], () => {
   const query = {}
   if (activeFilter.value !== 'all') query.status = activeFilter.value
   if (period.value !== 'all') query.period = period.value
   if (search.value) query.search = search.value
-  if (sourceFilter.value !== 'all') query.source = sourceFilter.value
+  if (!archivedView.value && sourceFilter.value !== 'all') query.source = sourceFilter.value
+  if (archivedView.value) query.archived = '1'
   router.replace({ query })
 })
 
@@ -296,7 +370,8 @@ function buildQuery() {
   if (activeFilter.value !== 'all') params.set('status', activeFilter.value)
   if (period.value !== 'all') params.set('period', period.value)
   if (search.value) params.set('search', search.value)
-  if (sourceFilter.value !== 'all') params.set('source', sourceFilter.value)
+  if (!archivedView.value && sourceFilter.value !== 'all') params.set('source', sourceFilter.value)
+  if (archivedView.value) params.set('archived', '1')
   const qs = params.toString()
   return qs ? `?${qs}` : ''
 }
@@ -304,16 +379,25 @@ function buildQuery() {
 const { data, pending, error: loadError, refresh } = useLazyAsyncData(
   'admin-orders',
   () => authedFetch(`/api/admin/orders${buildQuery()}`),
-  { server: false, watch: [activeFilter, period, search, sourceFilter] }
+  { server: false, watch: [activeFilter, period, search, sourceFilter, archivedView] }
 )
 
 const orders = computed(() => data.value?.orders ?? [])
 const hasActiveFilters = computed(
-  () => activeFilter.value !== 'all' || period.value !== 'all' || !!search.value || sourceFilter.value !== 'all'
+  () =>
+    activeFilter.value !== 'all' ||
+    period.value !== 'all' ||
+    !!search.value ||
+    (!archivedView.value && sourceFilter.value !== 'all')
 )
 const resultSummary = computed(() => {
   const n = data.value?.count ?? orders.value.length
-  return `${n} order${n === 1 ? '' : 's'}${hasActiveFilters.value ? ' found' : ''}`
+  const noun = archivedView.value ? 'archived order' : 'order'
+  return `${n} ${noun}${n === 1 ? '' : 's'}${hasActiveFilters.value ? ' found' : ''}`
+})
+const emptyMessage = computed(() => {
+  if (hasActiveFilters.value) return 'No orders match these filters.'
+  return archivedView.value ? 'No archived orders.' : 'No orders yet.'
 })
 
 function clearFilters() {
@@ -322,6 +406,28 @@ function clearFilters() {
   sourceFilter.value = 'all'
   searchInput.value = ''
   search.value = ''
+}
+
+function openOrder(o) {
+  navigateTo(`/admin/orders/${o.id}`)
+}
+
+// Context-aware row action(s): manual orders can be deleted; website orders
+// can be archived (or restored, in the Archived view). At most one per row.
+function rowActions(o) {
+  if (o.source !== 'website') {
+    return [
+      { kind: 'delete', label: `Delete ${o.orderNumber}`, short: 'Delete', icon: IconTrash, run: (row) => (deleteTarget.value = row) }
+    ]
+  }
+  if (archivedView.value) {
+    return [
+      { kind: 'restore', label: `Restore ${o.orderNumber}`, short: 'Restore', icon: IconRestore, run: (row) => doRestore(row) }
+    ]
+  }
+  return [
+    { kind: 'archive', label: `Archive ${o.orderNumber}`, short: 'Archive', icon: IconArchive, run: (row) => (archiveTarget.value = row) }
+  ]
 }
 
 // ── manual order permanent delete ──
@@ -341,6 +447,42 @@ async function doDelete() {
     deleteError.value = err?.data?.error || 'Could not delete this order.'
   } finally {
     deleting.value = false
+  }
+}
+
+// ── website order archive / restore (reversible, sets only archived_at) ──
+const archiveTarget = ref(null)
+const archiving = ref(false)
+const archiveError = ref('')
+
+async function doArchive() {
+  if (!archiveTarget.value) return
+  archiving.value = true
+  archiveError.value = ''
+  try {
+    await authedFetch(`/api/admin/orders/${archiveTarget.value.id}/archive`, {
+      method: 'PATCH',
+      body: { archived: true }
+    })
+    archiveTarget.value = null
+    await refresh()
+  } catch (err) {
+    archiveError.value = err?.data?.error || 'Could not archive this order.'
+  } finally {
+    archiving.value = false
+  }
+}
+
+const restoringId = ref(null)
+async function doRestore(o) {
+  restoringId.value = o.id
+  try {
+    await authedFetch(`/api/admin/orders/${o.id}/archive`, { method: 'PATCH', body: { archived: false } })
+    await refresh()
+  } catch {
+    // best-effort; the row stays and the action can be retried
+  } finally {
+    restoringId.value = null
   }
 }
 

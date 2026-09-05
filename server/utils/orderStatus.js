@@ -79,15 +79,42 @@ export const isAdminVisibleOrder = (source, status) =>
   isManualSource(source) || !HIDDEN_WEBSITE_STATUSES.includes(status)
 
 /**
- * PostgREST `.or(...)` filter string for the same rule, for the list / counts
- * / recent-orders queries: keep the row when it's a manual order OR its status
- * is not one of the hidden website statuses. (`source.neq.website` is false
- * for a NULL source, but every row has had a non-null `source` since the
- * Manual Orders migration, so a legacy website row can't slip through.)
+ * PostgREST `.or(...)` filter string for the abandoned-checkout rule only:
+ * keep the row when it's a manual order OR its status is not one of the hidden
+ * website statuses. (`source.neq.website` is false for a NULL source, but every
+ * row has had a non-null `source` since the Manual Orders migration, so a
+ * legacy website row can't slip through.)
+ *
+ * Used by the DETAIL endpoint (404 an abandoned checkout) and the status PATCH
+ * guard — NOT by the list. It deliberately says nothing about `archived_at`:
+ * an archived order's detail page must stay reachable.
  */
 export const ADMIN_VISIBLE_ORDERS_OR_FILTER = `source.neq.website,status.not.in.(${HIDDEN_WEBSITE_STATUSES.join(
   ','
 )})`
+
+/**
+ * ── Archive (website orders only) ────────────────────────────────────────
+ * `orders.archived_at` is an admin organisation/presentation flag, completely
+ * separate from `status`. Archiving a website order sets `archived_at = now()`;
+ * restoring sets it back to `null`. Nothing else on the row is ever touched.
+ * Manual orders are never archived (they're deleted instead) — the archive
+ * endpoint rejects them.
+ *
+ * `ADMIN_ACTIVE_ORDERS_OR_FILTER` is the DEFAULT admin-list + dashboard
+ * "recent orders" view: the abandoned-checkout rule AND, for website orders,
+ * `archived_at IS NULL`. Manual orders are unaffected by archive, so the
+ * `source.neq.website` branch still passes them through regardless.
+ *
+ * The "Archived" list view uses a plain AND instead (see index.get.js):
+ *   source = 'website' AND archived_at IS NOT NULL AND status NOT IN (hidden)
+ */
+export const ADMIN_ACTIVE_ORDERS_OR_FILTER = `source.neq.website,and(status.not.in.(${HIDDEN_WEBSITE_STATUSES.join(
+  ','
+)}),archived_at.is.null)`
+
+/** A website order is the only thing Archive/Restore may touch. */
+export const isArchivableSource = (source) => source === 'website'
 
 // Back-compat: some code/tests referenced the old single map. It matched the
 // website rules, so alias it.

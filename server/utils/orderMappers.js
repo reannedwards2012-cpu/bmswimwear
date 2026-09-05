@@ -30,7 +30,7 @@
  */
 import { adminTransitionsFor, isManualSource } from './orderStatus.js'
 export const ORDER_DETAIL_SELECT = `
-  id, order_number, created_at, updated_at, status, paid_at,
+  id, order_number, created_at, updated_at, status, paid_at, archived_at,
   source, currency, payment_method, subtotal_usd_cents, subtotal_xcd_cents,
   first_name, last_name, email, phone,
   delivery_method, shipping_country, shipping_address1, shipping_address2,
@@ -41,7 +41,7 @@ export const ORDER_DETAIL_SELECT = `
 
 // Light select for the admin list + dashboard recentOrders.
 export const ORDER_LIST_SELECT = `
-  id, order_number, created_at, first_name, last_name, email, status, paid_at,
+  id, order_number, created_at, first_name, last_name, email, status, paid_at, archived_at,
   source, currency, delivery_method, subtotal_usd_cents, subtotal_xcd_cents
 `.trim()
 
@@ -61,7 +61,8 @@ export function mapOrderListItem(o) {
     subtotalXcdCents: o.subtotal_xcd_cents,
     status: o.status,
     deliveryMethod: o.delivery_method,
-    paidAt: o.paid_at
+    paidAt: o.paid_at,
+    archivedAt: o.archived_at ?? null
   }
 }
 
@@ -73,6 +74,7 @@ export function mapOrderDetail(o) {
     updatedAt: o.updated_at,
     status: o.status,
     paidAt: o.paid_at,
+    archivedAt: o.archived_at ?? null,
     source: o.source,
     isManual: isManualSource(o.source),
     availableTransitions: adminTransitionsFor(o.source, o.status),
