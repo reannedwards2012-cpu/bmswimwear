@@ -1,7 +1,7 @@
 <template>
   <div class="section container-bm">
     <div class="mx-auto max-w-2xl">
-      <FancyHeading eyebrow="Account" title="My *orders*" center size="sm" as="h1" />
+      <FancyHeading eyebrow="Account" title="My *Orders*" center size="sm" as="h1" />
 
       <div class="mt-7">
         <p

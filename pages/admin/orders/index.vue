@@ -1,6 +1,6 @@
 <template>
   <div>
-    <FancyHeading eyebrow="Admin" title="Order *management*" size="sm" as="h1" />
+    <FancyHeading eyebrow="Admin" title="Order *Management*" size="sm" as="h1" />
 
     <!-- filters -->
     <div class="mt-6 space-y-4">

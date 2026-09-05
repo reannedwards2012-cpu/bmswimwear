@@ -39,7 +39,7 @@
 
       <!-- sales trend -->
       <section class="mt-6 rounded-4xl bg-cream p-6 shadow-card md:p-7">
-        <h2 class="font-display text-lg font-semibold text-ink">Sales trend</h2>
+        <h2 class="font-display text-lg font-semibold text-ink">Sales Trend</h2>
         <div class="mt-6">
           <AdminSalesTrendChart :points="data.salesTrend" />
         </div>

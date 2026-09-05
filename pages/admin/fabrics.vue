@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="flex flex-wrap items-center justify-between gap-4">
-      <FancyHeading eyebrow="Admin" title="Fabric *inventory*" size="sm" as="h1" />
+      <FancyHeading eyebrow="Admin" title="Fabric *Inventory*" size="sm" as="h1" />
       <button type="button" class="btn-primary" @click="openCreate">Add fabric</button>
     </div>
 
@@ -65,14 +65,16 @@
               <span v-else class="text-ink/30">Not linked to any product</span>
             </td>
             <td class="px-5 py-4 text-right">
-              <div class="flex flex-col items-end gap-1">
+              <div class="flex flex-col items-end gap-2">
                 <button type="button" class="text-xs font-semibold text-coral link-underline" @click="openEdit(f)">Edit</button>
                 <button
                   type="button"
-                  class="text-[0.7rem] font-medium text-ink/35 transition-colors hover:text-coral"
+                  class="text-ink/35 transition-colors hover:text-coral"
+                  :aria-label="`Delete ${f.name}`"
+                  :title="`Delete ${f.name}`"
                   @click="confirmDelete(f)"
                 >
-                  Delete
+                  <IconTrash class="h-4 w-4" />
                 </button>
               </div>
             </td>

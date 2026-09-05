@@ -5,7 +5,7 @@
   >
     <div class="max-h-[90vh] w-full overflow-y-auto rounded-t-4xl bg-cream p-6 shadow-card sm:max-w-xl sm:rounded-4xl sm:p-8">
       <div class="flex items-center justify-between">
-        <h2 class="font-display text-lg font-semibold text-ink">{{ fabric ? 'Edit fabric' : 'Add fabric' }}</h2>
+        <h2 class="font-display text-lg font-semibold text-ink">{{ fabric ? 'Edit Fabric' : 'Add Fabric' }}</h2>
         <button type="button" class="text-ink/40 transition-colors hover:text-ink" aria-label="Close" @click="$emit('cancel')">
           ✕
         </button>

@@ -35,7 +35,7 @@
 
           <!-- customer -->
           <section>
-            <h2 class="font-display text-lg font-semibold text-ink">Customer information</h2>
+            <h2 class="font-display text-lg font-semibold text-ink">Customer Information</h2>
             <div class="mt-4 space-y-4">
               <div class="grid gap-4 sm:grid-cols-2">
                 <CheckoutField label="First name" v-bind="bind(customer, 'firstName')" required autocomplete="given-name" />
@@ -48,7 +48,7 @@
 
           <!-- delivery method -->
           <section>
-            <h2 class="font-display text-lg font-semibold text-ink">Delivery method</h2>
+            <h2 class="font-display text-lg font-semibold text-ink">Delivery Method</h2>
             <div class="mt-4 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Delivery method">
               <label
                 v-for="m in DELIVERY_METHODS"
@@ -79,7 +79,7 @@
 
           <!-- delivery address (shipping only) -->
           <section v-if="needsAddress">
-            <h2 class="font-display text-lg font-semibold text-ink">Delivery address</h2>
+            <h2 class="font-display text-lg font-semibold text-ink">Delivery Address</h2>
             <div class="mt-4 space-y-4">
               <label class="block">
                 <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Country</span>
@@ -111,7 +111,7 @@
 
           <!-- order notes -->
           <section>
-            <h2 class="font-display text-lg font-semibold text-ink">Order notes</h2>
+            <h2 class="font-display text-lg font-semibold text-ink">Order Notes</h2>
             <div class="mt-4">
               <CheckoutField
                 v-model="notes"
@@ -130,7 +130,7 @@
         <aside class="space-y-4 lg:sticky lg:top-28 lg:h-fit">
           <div class="rounded-4xl bg-shell/60 p-6">
             <div class="flex items-center justify-between">
-              <h2 class="font-display text-lg font-semibold text-ink">Order summary</h2>
+              <h2 class="font-display text-lg font-semibold text-ink">Order Summary</h2>
               <NuxtLink to="/cart" class="text-xs font-semibold uppercase tracking-widest2 text-ink/45 hover:text-ink">
                 Edit cart
               </NuxtLink>

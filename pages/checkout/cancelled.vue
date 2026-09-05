@@ -3,7 +3,7 @@
     <div class="mx-auto max-w-lg text-center">
       <p class="eyebrow">Checkout</p>
       <h1 class="mt-2 font-display text-3xl font-semibold text-ink md:text-4xl">
-        Payment not completed
+        Payment Not Completed
       </h1>
       <p class="mt-4 leading-relaxed text-ink/70">
         Your payment wasn’t completed, so you haven’t been charged. Your order details

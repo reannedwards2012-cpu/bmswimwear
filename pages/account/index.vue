@@ -1,7 +1,7 @@
 <template>
   <div class="section container-bm">
     <div class="mx-auto max-w-lg">
-      <FancyHeading eyebrow="Account" title="Your *account*" center size="sm" as="h1" />
+      <FancyHeading eyebrow="Account" title="Your *Account*" center size="sm" as="h1" />
 
       <div class="mt-7 rounded-4xl bg-cream p-7 shadow-card md:p-9">
         <template v-if="authReady && isLoggedIn">

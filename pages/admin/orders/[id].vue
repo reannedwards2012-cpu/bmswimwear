@@ -49,14 +49,14 @@
 
           <!-- customer notes -->
           <section v-if="order.notes" class="rounded-4xl bg-cream p-6 shadow-card md:p-7">
-            <h2 class="font-display text-lg font-semibold text-ink">Customer notes</h2>
+            <h2 class="font-display text-lg font-semibold text-ink">Customer Notes</h2>
             <p class="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink/70">{{ order.notes }}</p>
           </section>
 
           <!-- admin notes — private, internal, never customer-facing -->
           <section class="rounded-4xl bg-shell/60 p-6 shadow-card ring-1 ring-coral/15 md:p-7">
             <div class="flex flex-wrap items-center gap-2">
-              <h2 class="font-display text-lg font-semibold text-ink">Admin notes</h2>
+              <h2 class="font-display text-lg font-semibold text-ink">Admin Notes</h2>
               <span class="rounded-full bg-coral/15 px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-widest2 text-coral">
                 Private
               </span>
