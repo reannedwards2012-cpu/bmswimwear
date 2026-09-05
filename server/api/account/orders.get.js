@@ -5,9 +5,15 @@
  * signed-in customer's own orders, newest first, as a STRICT safe-field
  * whitelist — no internal UUIDs, user_id, payment_id, callback token, checkout
  * idempotency key, Go2Pay request/order ids, payment URL or provider internals.
+ *
+ * Before listing, any historical GUEST order (`user_id IS NULL`) whose email
+ * matches this account's *verified* Supabase email is linked to the account —
+ * see server/utils/claimGuestOrders.js. Idempotent, server-side, never trusts
+ * a client-supplied email, never touches anything but `orders.user_id`.
  */
 import { supabaseAdmin } from '../../utils/supabaseAdmin.js'
 import { requireUser } from '../../utils/authUser.js'
+import { claimGuestOrdersForUser } from '../../utils/claimGuestOrders.js'
 
 const displayNumber = (n) => `BM-${String(n).padStart(6, '0')}`
 
@@ -16,6 +22,17 @@ export default defineEventHandler(async (event) => {
 
   try {
     const supabase = supabaseAdmin()
+
+    // Auto-link past guest orders placed with this account's *verified* email.
+    // Best-effort: a failure here just means those orders link on a later
+    // request (the operation is idempotent) — it never blocks the listing.
+    if (user.emailVerified && user.email) {
+      try {
+        await claimGuestOrdersForUser(supabase, user.id, user.email)
+      } catch (claimErr) {
+        console.error('[account/orders] guest-order claim skipped:', claimErr?.message)
+      }
+    }
 
     const { data, error } = await supabase
       .from('orders')

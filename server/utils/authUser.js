@@ -23,6 +23,10 @@ async function verify(token) {
     return {
       id: data.user.id,
       email: data.user.email ?? null,
+      // Supabase sets email_confirmed_at once the address is verified; null/
+      // undefined means unverified. Used to gate historical guest-order
+      // claiming (server/utils/claimGuestOrders.js).
+      emailVerified: !!data.user.email_confirmed_at,
       appMetadata: data.user.app_metadata ?? {}
     }
   } catch {
@@ -40,15 +44,16 @@ export async function getOptionalUserId(event) {
 }
 
 /**
- * Required auth (account API routes). Returns `{ id, email }` for the verified
- * user, or throws a 401.
+ * Required auth (account API routes). Returns `{ id, email, emailVerified }`
+ * for the verified user, or throws a 401. `email`/`emailVerified` come from
+ * the live Supabase Auth record — never from client state.
  */
 export async function requireUser(event) {
   const user = await verify(bearerToken(event))
   if (!user) {
     throw createError({ statusCode: 401, statusMessage: 'Sign in required' })
   }
-  return { id: user.id, email: user.email }
+  return { id: user.id, email: user.email, emailVerified: user.emailVerified }
 }
 
 /**
