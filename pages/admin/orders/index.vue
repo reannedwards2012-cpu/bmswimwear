@@ -1,7 +1,5 @@
 <template>
-  <div class="section container-bm">
-    <AdminNav active="orders" class="mb-4" />
-
+  <div>
     <FancyHeading eyebrow="Admin" title="Order *management*" size="sm" as="h1" />
 
     <!-- status filter -->
@@ -100,7 +98,7 @@
 import { computed, ref } from 'vue'
 import { formatUsd } from '~/utils/money'
 
-definePageMeta({ middleware: 'admin' })
+definePageMeta({ layout: 'admin', middleware: 'admin' })
 useHead({ title: 'Orders — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
 
 const { getAccessToken } = useAuth()

@@ -24,6 +24,15 @@
  */
 export const ORDER_STATUSES = ['pending', 'paid', 'processing', 'completed', 'cancelled', 'payment_failed']
 
+/**
+ * Statuses that represent a confirmed sale, for revenue/analytics purposes
+ * (server/api/admin/dashboard.get.js). Deliberately excludes 'pending' (no
+ * payment yet) and 'payment_failed'/'cancelled' (never became real revenue)
+ * — counting those would overstate sales with money that was never actually
+ * collected.
+ */
+export const SALES_QUALIFYING_STATUSES = ['paid', 'processing', 'completed']
+
 export const ADMIN_STATUS_TRANSITIONS = {
   pending: [],
   payment_failed: [],

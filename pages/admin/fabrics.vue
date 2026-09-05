@@ -1,7 +1,5 @@
 <template>
-  <div class="section container-bm">
-    <AdminNav active="fabrics" class="mb-4" />
-
+  <div>
     <div class="flex flex-wrap items-center justify-between gap-4">
       <FancyHeading eyebrow="Admin" title="Fabric *inventory*" size="sm" as="h1" />
       <button type="button" class="btn-primary" @click="openCreate">Add fabric</button>
@@ -127,7 +125,7 @@
 import { computed, ref } from 'vue'
 import { products as catalogueProducts } from '~/data/products.js'
 
-definePageMeta({ middleware: 'admin' })
+definePageMeta({ layout: 'admin', middleware: 'admin' })
 useHead({ title: 'Fabric inventory — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
 
 const { getAccessToken } = useAuth()

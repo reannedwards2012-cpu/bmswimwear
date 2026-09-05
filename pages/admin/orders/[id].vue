@@ -1,6 +1,5 @@
 <template>
-  <div class="section container-bm">
-    <AdminNav active="orders" class="mb-4" />
+  <div>
     <NuxtLink to="/admin/orders" class="text-xs font-semibold uppercase tracking-widest2 text-ink/45 hover:text-ink">
       ← Back to orders
     </NuxtLink>
@@ -170,7 +169,7 @@
 import { computed, ref, watch } from 'vue'
 import { formatUsd } from '~/utils/money'
 
-definePageMeta({ middleware: 'admin' })
+definePageMeta({ layout: 'admin', middleware: 'admin' })
 
 const route = useRoute()
 const { getAccessToken } = useAuth()
