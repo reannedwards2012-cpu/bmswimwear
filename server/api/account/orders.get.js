@@ -10,6 +10,12 @@
  * matches this account's *verified* Supabase email is linked to the account —
  * see server/utils/claimGuestOrders.js. Idempotent, server-side, never trusts
  * a client-supplied email, never touches anything but `orders.user_id`.
+ *
+ * Manual orders linked to the account appear here too. `currency` + the
+ * currency's subtotal ARE exposed (needed to render a price correctly).
+ * Still NOT exposed, conservatively: `source`, `payment_method`,
+ * `admin_notes`, a custom item's `description`, and a custom item's
+ * reference `image` (nulled).
  */
 import { supabaseAdmin } from '../../utils/supabaseAdmin.js'
 import { requireUser } from '../../utils/authUser.js'
@@ -40,16 +46,20 @@ export default defineEventHandler(async (event) => {
         `order_number,
          created_at,
          status,
+         currency,
          subtotal_usd_cents,
+         subtotal_xcd_cents,
          delivery_method,
          order_items (
            product_name,
            image,
+           is_custom,
            quantity,
            size,
            colour_name,
            coverage,
-           unit_price_usd_cents
+           unit_price_usd_cents,
+           unit_price_xcd_cents
          )`
       )
       .eq('user_id', user.id)
@@ -65,16 +75,20 @@ export default defineEventHandler(async (event) => {
       orderNumber: displayNumber(o.order_number),
       createdAt: o.created_at,
       status: o.status,
+      currency: o.currency ?? 'USD',
       subtotalUsdCents: o.subtotal_usd_cents,
+      subtotalXcdCents: o.subtotal_xcd_cents,
       deliveryMethod: o.delivery_method,
       items: (o.order_items ?? []).map((it) => ({
         productName: it.product_name,
-        image: it.image,
+        // never surface a custom-order reference/design image to the customer
+        image: it.is_custom ? null : it.image,
         quantity: it.quantity,
         size: it.size ?? null,
         colour: it.colour_name ?? null,
         coverage: it.coverage ?? null,
-        unitPriceUsdCents: it.unit_price_usd_cents
+        unitPriceUsdCents: it.unit_price_usd_cents,
+        unitPriceXcdCents: it.unit_price_xcd_cents
       }))
     }))
 

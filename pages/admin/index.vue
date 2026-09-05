@@ -37,6 +37,13 @@
         />
       </div>
 
+      <!-- XCD manual orders — shown only when there are any, so the dashboard is
+           unchanged for a USD-only history. USD and XCD totals are never summed. -->
+      <p v-if="data.metrics.xcd && data.metrics.xcd.orderCount > 0" class="mt-3 text-xs text-ink/55">
+        XCD orders: {{ data.metrics.xcd.orderCount }} · {{ formatMoney(data.metrics.xcd.salesXcdCents, 'XCD') }}
+        <span class="text-ink/35">(not included in the USD figures above)</span>
+      </p>
+
       <!-- sales trend -->
       <section class="mt-6 rounded-4xl bg-cream p-6 shadow-card md:p-7">
         <h2 class="font-display text-lg font-semibold text-ink">Sales Trend</h2>
@@ -56,7 +63,12 @@
                 <p class="truncate text-sm font-medium text-ink">{{ p.productName }}</p>
                 <p class="text-xs text-ink/45">{{ p.unitsSold }} sold</p>
               </div>
-              <span class="shrink-0 text-sm font-semibold text-ink">{{ money(p.salesUsdCents / 100) }}</span>
+              <span class="shrink-0 text-right text-sm font-semibold text-ink">
+                {{ money(p.salesUsdCents / 100) }}
+                <span v-if="p.salesXcdCents > 0" class="block text-xs font-medium text-ink/45">
+                  {{ formatMoney(p.salesXcdCents, 'XCD') }}
+                </span>
+              </span>
             </li>
           </ul>
         </section>
@@ -72,11 +84,16 @@
             <li v-for="o in data.recentOrders" :key="o.id">
               <NuxtLink :to="`/admin/orders/${o.id}`" class="flex items-center justify-between gap-3 py-3 hover:text-coral">
                 <div class="min-w-0">
-                  <p class="text-sm font-medium text-ink">{{ o.orderNumber }}</p>
-                  <p class="truncate text-xs text-ink/45">{{ o.firstName }} {{ o.lastName }} · {{ formatDate(o.createdAt) }}</p>
+                  <div class="flex items-center gap-2">
+                    <p class="text-sm font-medium text-ink">{{ o.orderNumber }}</p>
+                    <SourceBadge v-if="o.source && o.source !== 'website'" :source="o.source" />
+                  </div>
+                  <p class="truncate text-xs text-ink/45">{{ [o.firstName, o.lastName].filter(Boolean).join(' ') }} · {{ formatDate(o.createdAt) }}</p>
                 </div>
                 <div class="shrink-0 text-right">
-                  <p class="text-sm font-semibold text-ink">{{ money(o.subtotalUsdCents / 100) }}</p>
+                  <p class="text-sm font-semibold text-ink">
+                    {{ formatMoney(o.currency === 'XCD' ? o.subtotalXcdCents : o.subtotalUsdCents, o.currency) }}
+                  </p>
                   <span class="rounded-full px-2.5 py-0.5 text-[0.65rem] font-semibold" :class="statusClass(o.status)">
                     {{ statusLabel(o.status) }}
                   </span>
@@ -92,7 +109,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { formatUsd } from '~/utils/money'
+import { formatUsd, formatMoney } from '~/utils/money'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
 useHead({ title: 'Overview — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
@@ -136,7 +153,7 @@ const STATUS_STYLES = {
 }
 const STATUS_LABELS = {
   paid: 'Paid',
-  processing: 'Processing',
+  processing: 'In Progress',
   completed: 'Completed',
   cancelled: 'Cancelled',
   pending: 'Pending',

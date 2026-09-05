@@ -1,24 +1,29 @@
 /**
  * PATCH /api/admin/orders/:id/status
  *
- * Admin-only. Moves an order between operational statuses — never touches
- * payment verification. 'paid' is always rejected as a target (only the
- * Go2Pay callback in server/utils/go2payVerify.js may set it, tied to
- * independent verification + paid_at). Every other transition must appear
- * in ADMIN_STATUS_TRANSITIONS for the order's CURRENT status, so e.g. a
- * pending order can't be nudged into 'processing' by hand.
+ * Admin-only. Moves an order between operational statuses.
+ *
+ * WEBSITE orders: target 'paid' is ALWAYS rejected (only the Go2Pay callback
+ * in server/utils/go2payVerify.js may set it, tied to independent
+ * verification + paid_at). Every other transition must appear in
+ * WEBSITE_STATUS_TRANSITIONS for the current status.
+ *
+ * MANUAL orders (source ≠ 'website'): payment happened outside the website
+ * flow, so `pending → paid` is allowed here — it sets `paid_at = now()` and,
+ * optionally, `payment_method` from the body. No fake Go2Pay ids are ever
+ * written. Other transitions follow MANUAL_STATUS_TRANSITIONS.
  *
  * The update is guarded on the status read moments earlier
- * (`.eq('status', current.status)`), so a concurrent change — most notably
- * the Go2Pay callback marking the same order paid — makes this a no-op
- * (409) instead of silently clobbering it. paid_at is never written here.
+ * (`.eq('status', current.status)`), so a concurrent change is a no-op (409)
+ * instead of a silent clobber.
  */
 import { supabaseAdmin } from '../../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../../utils/authUser.js'
-import { ADMIN_STATUS_TRANSITIONS } from '../../../../utils/orderStatus.js'
+import { adminTransitionsFor, isManualSource, isAdminVisibleOrder } from '../../../../utils/orderStatus.js'
 import { ORDER_DETAIL_SELECT, mapOrderDetail } from '../../../../utils/orderMappers.js'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PAYMENT_METHODS = ['cash', 'bank_transfer', 'payment_link', 'other']
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event) // throws 401 / 403
@@ -31,13 +36,6 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event).catch(() => null)
   const nextStatus = typeof body?.status === 'string' ? body.status.trim() : ''
-
-  // Hard rule, independent of the transition map: nothing reaches 'paid'
-  // through this endpoint, ever.
-  if (nextStatus === 'paid') {
-    setResponseStatus(event, 400)
-    return { error: 'Orders can only be marked paid by a verified Go2Pay payment.' }
-  }
   if (!nextStatus) {
     setResponseStatus(event, 400)
     return { error: 'A target status is required.' }
@@ -48,7 +46,7 @@ export default defineEventHandler(async (event) => {
 
     const { data: current, error: findError } = await supabase
       .from('orders')
-      .select('id, status')
+      .select('id, status, source')
       .eq('id', id)
       .maybeSingle()
 
@@ -62,7 +60,24 @@ export default defineEventHandler(async (event) => {
       return { error: 'Order not found.' }
     }
 
-    const allowedTargets = ADMIN_STATUS_TRANSITIONS[current.status] ?? []
+    // Defense-in-depth: an abandoned website checkout attempt isn't a visible
+    // admin order, so it can't be transitioned here either (the transition
+    // maps already forbid every move out of website `pending`, but this keeps
+    // the visibility rule in one place).
+    if (!isAdminVisibleOrder(current.source, current.status)) {
+      setResponseStatus(event, 404)
+      return { error: 'Order not found.' }
+    }
+
+    const manual = isManualSource(current.source)
+
+    // Hard rule for website orders: nothing reaches 'paid' by hand, ever.
+    if (nextStatus === 'paid' && !manual) {
+      setResponseStatus(event, 400)
+      return { error: 'Website orders can only be marked paid by a verified Go2Pay payment.' }
+    }
+
+    const allowedTargets = adminTransitionsFor(current.source, current.status)
     if (!allowedTargets.includes(nextStatus)) {
       setResponseStatus(event, 400)
       return {
@@ -72,9 +87,25 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    const patch = { status: nextStatus, updated_at: new Date().toISOString() }
+
+    // Manual pending → paid: this endpoint IS the payment record for a
+    // manual order. Set paid_at now; accept an optional payment_method.
+    if (nextStatus === 'paid' && manual) {
+      patch.paid_at = new Date().toISOString()
+      if (body?.paymentMethod != null && body.paymentMethod !== '') {
+        const pm = String(body.paymentMethod).trim()
+        if (!PAYMENT_METHODS.includes(pm)) {
+          setResponseStatus(event, 400)
+          return { error: `Payment method must be one of: ${PAYMENT_METHODS.join(', ')}.` }
+        }
+        patch.payment_method = pm
+      }
+    }
+
     const { data: updated, error: updateError } = await supabase
       .from('orders')
-      .update({ status: nextStatus, updated_at: new Date().toISOString() })
+      .update(patch)
       .eq('id', id)
       .eq('status', current.status)
       .select('id')

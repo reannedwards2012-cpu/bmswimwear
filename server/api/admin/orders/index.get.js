@@ -1,10 +1,11 @@
 /**
- * GET /api/admin/orders?status=&period=&search=
+ * GET /api/admin/orders?status=&period=&search=&source=
  *
  * Admin-only. Returns a safe list of orders (newest first), optionally
- * filtered by status, a created_at date period, and/or a search term. Never
- * returns payment tokens/idempotency keys/user_id or other internals — see
- * server/utils/orderMappers.js for the whitelist.
+ * filtered by status, a created_at date period, a search term, and/or the
+ * order `source` (website / instagram / whatsapp / in_person / other).
+ * Never returns payment tokens/idempotency keys/user_id or other internals —
+ * see server/utils/orderMappers.js for the whitelist.
  *
  * period is deliberately evaluated against `created_at`, NOT `paid_at` —
  * this is an operational "when was this order placed" list (unlike the
@@ -14,16 +15,16 @@
  */
 import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../utils/authUser.js'
-import { ORDER_STATUSES } from '../../../utils/orderStatus.js'
-import { mapOrderListItem } from '../../../utils/orderMappers.js'
+import { ORDER_STATUSES, ADMIN_VISIBLE_ORDERS_OR_FILTER } from '../../../utils/orderStatus.js'
+import { ORDER_LIST_SELECT, mapOrderListItem } from '../../../utils/orderMappers.js'
 import { PERIODS, getPeriodRange } from '../../../utils/dashboardPeriod.js'
 import { buildOrderSearchFilter } from '../../../utils/orderSearch.js'
 
-const ORDER_LIST_SELECT =
-  'id, order_number, created_at, first_name, last_name, email, subtotal_usd_cents, status, delivery_method, paid_at'
 // 'all' has no meaning for the Overview dashboard (it always reports on a
 // concrete period), so it's added here rather than in PERIODS itself.
 const LIST_PERIODS = ['all', ...PERIODS]
+const ORDER_SOURCES = ['website', 'instagram', 'whatsapp', 'in_person', 'other']
+const LIST_SOURCES = ['all', ...ORDER_SOURCES]
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event) // throws 401 / 403
@@ -32,6 +33,7 @@ export default defineEventHandler(async (event) => {
   const statusFilter = typeof query.status === 'string' ? query.status : ''
   const period = typeof query.period === 'string' && query.period ? query.period : 'all'
   const rawSearch = typeof query.search === 'string' ? query.search : ''
+  const sourceFilter = typeof query.source === 'string' && query.source ? query.source : 'all'
 
   if (statusFilter && !ORDER_STATUSES.includes(statusFilter)) {
     setResponseStatus(event, 400)
@@ -41,18 +43,29 @@ export default defineEventHandler(async (event) => {
     setResponseStatus(event, 400)
     return { error: 'Invalid period. Use all, week, month, or year.' }
   }
+  if (!LIST_SOURCES.includes(sourceFilter)) {
+    setResponseStatus(event, 400)
+    return { error: 'Invalid source filter.' }
+  }
 
   try {
     const supabase = supabaseAdmin()
     const range = period === 'all' ? null : getPeriodRange(period)
     const search = buildOrderSearchFilter(rawSearch) // null for an empty/whitespace-only term
 
-    // Shared by both queries below so the date/search scope can never drift
-    // between the list and the status counts — only the status filter and
-    // the selected columns differ between them.
+    // Shared by both queries below so the date/search/source scope — AND the
+    // admin-visibility rule — can never drift between the list and the status
+    // counts. Only the status filter and the selected columns differ.
+    //
+    // The visibility `.or()` hides abandoned website checkout attempts
+    // (`source='website'` AND status pending/payment_failed). Chained `.or()`
+    // calls are AND-ed by PostgREST, so this composes correctly with the
+    // search `.or()` — a hidden row is never surfaced by a name/phone match.
     const applyShared = (q) => {
+      q = q.or(ADMIN_VISIBLE_ORDERS_OR_FILTER)
       if (range) q = q.gte('created_at', range.start.toISOString()).lt('created_at', range.end.toISOString())
       if (search) q = q.or(search.orClause)
+      if (sourceFilter !== 'all') q = q.eq('source', sourceFilter)
       return q
     }
 
@@ -91,7 +104,7 @@ export default defineEventHandler(async (event) => {
       orders,
       count: orders.length,
       statusCounts,
-      filters: { status: statusFilter || null, period, search: search?.term ?? null }
+      filters: { status: statusFilter || null, period, search: search?.term ?? null, source: sourceFilter }
     }
   } catch (err) {
     console.error('[admin/orders] unexpected error:', err?.message)

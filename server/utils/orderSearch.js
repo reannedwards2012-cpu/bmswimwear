@@ -1,11 +1,10 @@
 /**
  * Search-term handling for GET /api/admin/orders (server/api/admin/orders/index.get.js).
  *
- * Deliberately scoped to order_number/first_name/last_name/email only — never
- * `notes` (customer) or `admin_notes` (private/internal), per spec for this
- * phase. All matching happens server-side via a single PostgREST `.or()`
- * filter, so it stays cheap as the order count grows (no fetch-everything-
- * and-filter-in-JS).
+ * Deliberately scoped to order_number / first_name / last_name / email /
+ * phone only — never `notes` (customer) or `admin_notes` (private/internal).
+ * All matching happens server-side via a single PostgREST `.or()` filter, so
+ * it stays cheap as the order count grows (no fetch-everything-and-filter).
  */
 
 const SEARCH_MAX_LEN = 200
@@ -49,6 +48,12 @@ export function buildOrderSearchFilter(rawTerm) {
     const n = parseInt(digits, 10)
     if (Number.isSafeInteger(n)) clauses.push(`order_number.eq.${n}`)
   }
+
+  // Phone: match on the digit run only, so "473 555 0100" / "473-555-0100" /
+  // "4735550100" all find a stored "+14735550100". Requires ≥3 digits so a
+  // one-word name search isn't turned into a phone scan.
+  const phoneDigits = term.replace(/\D/g, '')
+  if (phoneDigits.length >= 3) clauses.push(`phone.ilike.*${phoneDigits}*`)
 
   const tokens = term.split(/\s+/).filter(Boolean)
   if (tokens.length === 2) {

@@ -25,11 +25,21 @@
  * most recent orders of ANY status, ordered and filtered by `created_at`,
  * unaffected by `period` or by the qualifying-status filter — they're
  * operational ("what just happened"), not analytics.
+ *
+ * ── Currency (manual XCD orders) ──────────────────────────────────────────
+ * Every website order + USD manual orders have `currency = 'USD'`; XCD
+ * manual orders have `currency = 'XCD'` and store their total in
+ * `subtotal_xcd_cents`. USD and XCD amounts are NEVER added together. The
+ * headline USD figures (Sales, AOV, Sales Trend, Top Products revenue) are
+ * scoped to `currency = 'USD'` orders. The Orders count and Best Seller /
+ * Top Products *ranking* count units across both currencies (a unit is a
+ * unit). `metrics.xcd` carries the XCD side separately; `topProducts[].salesXcdCents`
+ * is the per-product XCD revenue.
  */
 import { supabaseAdmin } from '../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../utils/authUser.js'
-import { SALES_QUALIFYING_STATUSES } from '../../utils/orderStatus.js'
-import { mapOrderListItem } from '../../utils/orderMappers.js'
+import { SALES_QUALIFYING_STATUSES, ADMIN_VISIBLE_ORDERS_OR_FILTER } from '../../utils/orderStatus.js'
+import { ORDER_LIST_SELECT, mapOrderListItem } from '../../utils/orderMappers.js'
 import { PERIODS, getPeriodRange, buildTrendBuckets } from '../../utils/dashboardPeriod.js'
 
 const RECENT_ORDERS_LIMIT = 5
@@ -57,15 +67,21 @@ export default defineEventHandler(async (event) => {
       // deliberate — see the file header.
       supabase
         .from('orders')
-        .select('id, paid_at, subtotal_usd_cents, order_items(product_id, product_name, quantity, unit_price_usd_cents)')
+        .select(
+          'id, paid_at, currency, subtotal_usd_cents, subtotal_xcd_cents, order_items(product_id, product_name, quantity, unit_price_usd_cents, unit_price_xcd_cents)'
+        )
         .in('status', SALES_QUALIFYING_STATUSES)
         .gte('paid_at', range.start.toISOString())
         .lt('paid_at', range.end.toISOString()),
       // Recent orders — independent of period/status, newest first, keyed
       // on created_at (operational "what just happened", not analytics).
+      // Follows the same admin-visibility rule as Order Management: abandoned
+      // website checkout attempts (pending/payment_failed website rows) are
+      // not "recent orders" and must not appear or bump a real one off the list.
       supabase
         .from('orders')
-        .select('id, order_number, created_at, first_name, last_name, email, subtotal_usd_cents, status, delivery_method, paid_at')
+        .select(ORDER_LIST_SELECT)
+        .or(ADMIN_VISIBLE_ORDERS_OR_FILTER)
         .order('created_at', { ascending: false })
         .limit(RECENT_ORDERS_LIMIT),
       // ANOMALY CHECK — global, not period-scoped: a qualifying-status order
@@ -103,39 +119,47 @@ export default defineEventHandler(async (event) => {
     }
 
     const orders = salesRes.data ?? []
+    // XCD amounts are never combined with USD amounts.
+    const usdOrders = orders.filter((o) => o.currency !== 'XCD')
+    const xcdOrders = orders.filter((o) => o.currency === 'XCD')
 
     // ── headline metrics ──
-    const salesUsdCents = orders.reduce((sum, o) => sum + (o.subtotal_usd_cents || 0), 0)
-    const orderCount = orders.length
-    const averageOrderUsdCents = orderCount > 0 ? Math.round(salesUsdCents / orderCount) : 0
+    const salesUsdCents = usdOrders.reduce((sum, o) => sum + (o.subtotal_usd_cents || 0), 0)
+    const orderCount = orders.length // a count — currency-agnostic
+    const averageOrderUsdCents = usdOrders.length > 0 ? Math.round(salesUsdCents / usdOrders.length) : 0
+    const xcd = {
+      salesXcdCents: xcdOrders.reduce((sum, o) => sum + (o.subtotal_xcd_cents || 0), 0),
+      orderCount: xcdOrders.length
+    }
 
     // ── product aggregation (best seller + top products share one pass) ──
-    // Keyed by product_id (falls back to the name for any legacy row that
-    // somehow lacks it) so a renamed/re-titled product still aggregates as
-    // one line rather than splitting across its old and new names.
+    // Units are counted across ALL currencies; revenue is split per currency.
     const productAgg = new Map()
     for (const o of orders) {
+      const isXcd = o.currency === 'XCD'
       for (const item of o.order_items ?? []) {
         const key = item.product_id || item.product_name
         if (!key) continue
-        const entry = productAgg.get(key) || { productName: item.product_name, unitsSold: 0, salesUsdCents: 0 }
-        entry.unitsSold += item.quantity || 0
-        entry.salesUsdCents += (item.unit_price_usd_cents || 0) * (item.quantity || 0)
+        const entry = productAgg.get(key) || { productName: item.product_name, unitsSold: 0, salesUsdCents: 0, salesXcdCents: 0 }
+        const qty = item.quantity || 0
+        entry.unitsSold += qty
+        if (isXcd) entry.salesXcdCents += (item.unit_price_xcd_cents || 0) * qty
+        else entry.salesUsdCents += (item.unit_price_usd_cents || 0) * qty
         productAgg.set(key, entry)
       }
     }
     const rankedProducts = [...productAgg.values()].sort(
-      (a, b) => b.unitsSold - a.unitsSold || b.salesUsdCents - a.salesUsdCents
+      (a, b) => b.unitsSold - a.unitsSold || b.salesUsdCents - a.salesUsdCents || b.salesXcdCents - a.salesXcdCents
     )
     const bestSeller = rankedProducts.length
       ? { productName: rankedProducts[0].productName, unitsSold: rankedProducts[0].unitsSold }
       : { productName: null, unitsSold: 0 }
     const topProducts = rankedProducts.slice(0, TOP_PRODUCTS_LIMIT)
 
-    // ── sales trend (zero-filled scaffold, then accumulate real orders) ──
+    // ── sales trend (USD only — the chart is a USD $ chart) ──
     const { buckets, keyFor } = buildTrendBuckets(period, range)
     const bucketByKey = new Map(buckets.map((b) => [b.key, b]))
-    for (const o of orders) {
+    for (const o of usdOrders) {
       const bucket = bucketByKey.get(keyFor(o.paid_at))
       if (bucket) bucket.salesUsdCents += o.subtotal_usd_cents || 0
     }
@@ -144,7 +168,7 @@ export default defineEventHandler(async (event) => {
     return {
       period,
       range: { start: range.start.toISOString(), end: range.end.toISOString() },
-      metrics: { salesUsdCents, orderCount, averageOrderUsdCents, bestSeller },
+      metrics: { salesUsdCents, orderCount, averageOrderUsdCents, bestSeller, xcd },
       salesTrend,
       topProducts,
       recentOrders: (recentRes.data ?? []).map(mapOrderListItem)

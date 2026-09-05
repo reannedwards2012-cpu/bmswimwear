@@ -32,7 +32,7 @@
               <p class="font-display text-lg font-semibold text-ink">{{ o.orderNumber }}</p>
               <span
                 class="text-[0.7rem] font-semibold uppercase tracking-widest2"
-                :class="o.status === 'paid' ? 'text-ink/50' : 'text-coral'"
+                :class="['pending', 'payment_failed', 'cancelled'].includes(o.status) ? 'text-coral' : 'text-ink/50'"
               >
                 {{ statusLabel(o.status) }}
               </span>
@@ -44,16 +44,23 @@
             <ul class="mt-4 divide-y divide-ink/10 border-t border-ink/10">
               <li v-for="(it, i) in o.items" :key="i" class="flex gap-3 py-3">
                 <img
+                  v-if="it.image"
                   :src="it.image"
                   :alt="it.productName"
                   class="aspect-[3/4] w-14 shrink-0 rounded-xl object-cover"
                 >
+                <span
+                  v-else
+                  class="grid aspect-[3/4] w-14 shrink-0 place-items-center rounded-xl bg-sand/40 text-[0.55rem] text-ink/30"
+                >
+                  No image
+                </span>
                 <div class="flex min-w-0 flex-1 flex-col justify-center">
                   <p class="text-sm font-medium text-ink">{{ it.productName }}</p>
                   <p v-if="optionText(it)" class="mt-0.5 text-xs text-ink/55">{{ optionText(it) }}</p>
                   <div class="mt-1 flex items-center justify-between text-xs text-ink/55">
                     <span>Qty {{ it.quantity }}</span>
-                    <span>{{ money(it.unitPriceUsdCents / 100) }} each</span>
+                    <span>{{ itemAmount(o, it) }} each</span>
                   </div>
                 </div>
               </li>
@@ -61,7 +68,7 @@
 
             <div class="mt-3 flex items-center justify-between border-t border-ink/10 pt-3 text-sm">
               <span class="text-ink/60">Subtotal</span>
-              <span class="font-semibold text-ink">USD {{ money(o.subtotalUsdCents / 100) }}</span>
+              <span class="font-semibold text-ink">{{ subtotalAmount(o) }}</span>
             </div>
           </li>
         </ul>
@@ -76,13 +83,24 @@
 
 <script setup>
 import { computed } from 'vue'
-import { formatUsd } from '~/utils/money'
+import { formatUsd, formatMoney } from '~/utils/money'
 
 definePageMeta({ middleware: 'auth' })
 useHead({ title: 'My orders — Bahama Mama Swimwear' })
 
 const { getAccessToken } = useAuth()
 const money = formatUsd
+
+// Currency-aware rendering. A USD order keeps its existing "USD $x.xx" look;
+// an XCD manual order (linked via the guest-email claim) shows "XCD $x.xx".
+const itemAmount = (o, it) =>
+  o.currency === 'XCD'
+    ? formatMoney(it.unitPriceXcdCents, 'XCD')
+    : money((it.unitPriceUsdCents ?? 0) / 100)
+const subtotalAmount = (o) =>
+  o.currency === 'XCD'
+    ? formatMoney(o.subtotalXcdCents, 'XCD')
+    : `USD ${money((o.subtotalUsdCents ?? 0) / 100)}`
 
 const { data, pending, error, refresh } = useLazyAsyncData(
   'account-orders',
@@ -122,5 +140,12 @@ function formatDate(iso) {
 }
 
 const optionText = (it) => [it.size, it.colour, it.coverage].filter(Boolean).join(' · ')
-const statusLabel = (s) => (s === 'paid' ? 'Paid' : s === 'pending' ? 'Awaiting payment' : s)
+const STATUS_LABELS = {
+  paid: 'Paid',
+  pending: 'Awaiting payment',
+  processing: 'In progress',
+  completed: 'Completed',
+  cancelled: 'Cancelled'
+}
+const statusLabel = (s) => STATUS_LABELS[s] || s
 </script>

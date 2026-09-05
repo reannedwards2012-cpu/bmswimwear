@@ -71,6 +71,11 @@ export default defineEventHandler(async (event) => {
   const { orderRow, itemRows } = result
   const checkoutId = orderRow.checkout_idempotency_key
 
+  // Website orders are always source 'website', currency 'USD' (the column
+  // defaults cover this too — set explicitly so it can never drift).
+  orderRow.source = 'website'
+  orderRow.currency = 'USD'
+
   // Attach the verified signed-in customer, or null for guest checkout.
   // NEVER read from the request body. Only used on a fresh insert (step 2);
   // an existing order's user_id is left untouched on retry.
