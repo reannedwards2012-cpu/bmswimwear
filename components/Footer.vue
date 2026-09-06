@@ -1,5 +1,9 @@
 <template>
-  <footer class="mt-24 bg-ink text-sand/80">
+  <footer class="relative isolate mt-24 overflow-hidden bg-ink text-sand/80">
+    <!-- recurring brand detail — a soft coconut-frond shadow in the bottom-left corner -->
+    <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+      <PalmShadow position="bottom-left" tone="light" size="lg" />
+    </div>
     <div class="container-bm grid gap-12 py-16 md:grid-cols-4">
       <div class="md:col-span-2">
         <NuxtLink to="/" class="inline-block" aria-label="Bahama Mama Swimwear — home">

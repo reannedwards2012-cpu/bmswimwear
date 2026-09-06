@@ -179,7 +179,10 @@
     <BrandPillars />
 
     <!-- 7 · JOIN EMAIL LIST -->
-    <section class="bg-ink">
+    <section class="relative isolate overflow-hidden bg-ink">
+      <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        <PalmShadow position="bottom-right" tone="light" size="md" />
+      </div>
       <div class="container-bm grid items-center gap-10 py-16 md:grid-cols-2 md:py-20">
         <div>
           <p class="eyebrow text-blush">Stay in the loop</p>
