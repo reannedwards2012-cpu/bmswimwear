@@ -2,8 +2,8 @@
   <div>
     <FancyHeading eyebrow="Admin" title="Inquiry *Management*" size="sm" as="h1" />
 
-    <!-- filters -->
-    <div class="mt-6 space-y-4">
+    <!-- filters — search + a compact labelled Status dropdown -->
+    <div class="mt-6 space-y-3">
       <div class="relative sm:max-w-sm">
         <svg viewBox="0 0 24 24" class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" fill="none" stroke="currentColor" stroke-width="1.8">
           <circle cx="11" cy="11" r="7" />
@@ -17,18 +17,7 @@
         />
       </div>
 
-      <div class="scrollbar-hide flex gap-2 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible">
-        <button
-          v-for="f in STATUS_FILTERS"
-          :key="f.value"
-          type="button"
-          class="shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-widest2 transition-colors"
-          :class="activeFilter === f.value ? 'border-ink bg-ink text-cream' : 'border-ink/15 text-ink/60 hover:border-ink/40'"
-          @click="activeFilter = f.value"
-        >
-          {{ f.label }}<span v-if="filterCount(f.value) !== null" class="ml-1 opacity-60">({{ filterCount(f.value) }})</span>
-        </button>
-      </div>
+      <AdminFilterSelect label="Status" v-model="activeFilter" :options="statusOptions" class="sm:w-52" />
     </div>
 
     <p v-if="pending && !data" class="mt-8 rounded-4xl bg-cream p-7 text-sm text-ink/50 shadow-card">Loading inquiries…</p>
@@ -285,6 +274,15 @@ function filterCount(value) {
   if (value === 'all') return Object.values(counts).reduce((sum, n) => sum + n, 0)
   return counts[value] ?? 0
 }
+
+// Status options for the dropdown — same values as the pills, with the live
+// count appended to the label when the server has returned statusCounts.
+const statusOptions = computed(() =>
+  STATUS_FILTERS.map((f) => {
+    const c = filterCount(f.value)
+    return { value: f.value, label: c !== null ? `${f.label} (${c})` : f.label }
+  })
+)
 
 const fullName = (q) => [q.firstName, q.lastName].filter(Boolean).join(' ') || '—'
 

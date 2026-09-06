@@ -3,18 +3,7 @@
     <div class="flex flex-wrap items-center justify-between gap-4">
       <FancyHeading eyebrow="Admin" title="*Overview*" size="sm" as="h1" />
 
-      <div class="flex flex-wrap gap-2">
-        <button
-          v-for="f in PERIODS"
-          :key="f.value"
-          type="button"
-          class="rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-widest2 transition-colors"
-          :class="period === f.value ? 'border-ink bg-ink text-cream' : 'border-ink/15 text-ink/60 hover:border-ink/40'"
-          @click="period = f.value"
-        >
-          {{ f.label }}
-        </button>
-      </div>
+      <AdminFilterSelect label="Period" v-model="period" :options="PERIODS" class="w-40" />
     </div>
 
     <p v-if="pending && !data" class="mt-8 rounded-4xl bg-cream p-7 text-sm text-ink/50 shadow-card">Loading dashboard…</p>

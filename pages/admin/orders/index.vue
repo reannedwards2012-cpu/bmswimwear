@@ -5,79 +5,27 @@
       <NuxtLink v-if="!archivedView" to="/admin/orders/new" class="btn-primary">Add Order</NuxtLink>
     </div>
 
-    <!-- active / archived view toggle -->
-    <div class="mt-5 flex gap-2">
-      <button
-        v-for="v in VIEW_TABS"
-        :key="v.value"
-        type="button"
-        class="rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-widest2 transition-colors"
-        :class="(v.value === 'archived') === archivedView ? 'border-ink bg-ink text-cream' : 'border-ink/15 text-ink/60 hover:border-ink/40'"
-        @click="archivedView = v.value === 'archived'"
-      >
-        {{ v.label }}
-      </button>
-    </div>
-
-    <!-- filters -->
-    <div class="mt-4 space-y-4">
-      <!-- search + period, side by side on desktop, stacked on mobile -->
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div class="relative flex-1 sm:max-w-xs">
-          <svg viewBox="0 0 24 24" class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" fill="none" stroke="currentColor" stroke-width="1.8">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" stroke-linecap="round" />
-          </svg>
-          <input
-            v-model="searchInput"
-            type="search"
-            placeholder="Order #, name, or email…"
-            class="w-full rounded-full border border-ink/15 bg-cream py-2 pl-9 pr-4 text-sm text-ink placeholder:text-ink/35 focus:border-coral focus:outline-none"
-          />
-        </div>
-
-        <!-- single scrollable row on mobile (keeps the filter block short),
-             wraps normally from sm: up where there's room -->
-        <div class="scrollbar-hide flex gap-2 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible">
-          <button
-            v-for="p in PERIODS"
-            :key="p.value"
-            type="button"
-            class="shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-widest2 transition-colors"
-            :class="period === p.value ? 'border-ink bg-ink text-cream' : 'border-ink/15 text-ink/60 hover:border-ink/40'"
-            @click="period = p.value"
-          >
-            {{ p.label }}
-          </button>
-        </div>
+    <!-- filters — compact labelled dropdowns beneath the search field -->
+    <div class="mt-5 space-y-3">
+      <div class="relative sm:max-w-xs">
+        <svg viewBox="0 0 24 24" class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" stroke-linecap="round" />
+        </svg>
+        <input
+          v-model="searchInput"
+          type="search"
+          placeholder="Order #, name, or email…"
+          class="w-full rounded-full border border-ink/15 bg-cream py-2 pl-9 pr-4 text-sm text-ink placeholder:text-ink/35 focus:border-coral focus:outline-none"
+        />
       </div>
 
-      <!-- status filter — same scrollable-on-mobile treatment -->
-      <div class="scrollbar-hide flex gap-2 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible">
-        <button
-          v-for="f in STATUS_FILTERS"
-          :key="f.value"
-          type="button"
-          class="shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-widest2 transition-colors"
-          :class="activeFilter === f.value ? 'border-ink bg-ink text-cream' : 'border-ink/15 text-ink/60 hover:border-ink/40'"
-          @click="activeFilter = f.value"
-        >
-          {{ f.label }}<span v-if="filterCount(f.value) !== null" class="ml-1 opacity-60">({{ filterCount(f.value) }})</span>
-        </button>
-      </div>
-
-      <!-- source filter — not shown in the Archived view (always website) -->
-      <div v-if="!archivedView" class="scrollbar-hide flex gap-2 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible">
-        <button
-          v-for="s in SOURCE_FILTERS"
-          :key="s.value"
-          type="button"
-          class="shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-widest2 transition-colors"
-          :class="sourceFilter === s.value ? 'border-ink bg-ink text-cream' : 'border-ink/15 text-ink/60 hover:border-ink/40'"
-          @click="sourceFilter = s.value"
-        >
-          {{ s.label }}
-        </button>
+      <div class="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end">
+        <AdminFilterSelect label="View" v-model="viewValue" :options="VIEW_TABS" class="sm:w-40" />
+        <AdminFilterSelect label="Status" v-model="activeFilter" :options="statusOptions" class="sm:w-52" />
+        <!-- Source is hidden in the Archived view (archived = website orders only) -->
+        <AdminFilterSelect v-if="!archivedView" label="Source" v-model="sourceFilter" :options="SOURCE_FILTERS" class="sm:w-44" />
+        <AdminFilterSelect label="Period" v-model="period" :options="PERIODS" class="sm:w-40" />
       </div>
     </div>
 
@@ -338,6 +286,14 @@ const activeFilter = ref(initialStatus)
 const period = ref(initialPeriod)
 const sourceFilter = ref(initialSource)
 const archivedView = ref(initialArchived)
+
+// the View dropdown drives the same `archivedView` boolean the toggle did
+const viewValue = computed({
+  get: () => (archivedView.value ? 'archived' : 'active'),
+  set: (v) => {
+    archivedView.value = v === 'archived'
+  }
+})
 // searchInput is bound to the text field directly (updates every
 // keystroke); `search` is the debounced value actually sent to the API and
 // synced to the URL, so typing doesn't fire a request (or a URL update) on
@@ -495,6 +451,15 @@ function filterCount(value) {
   if (value === 'all') return Object.values(counts).reduce((sum, n) => sum + n, 0)
   return counts[value] ?? 0
 }
+
+// Status options for the dropdown — same values as the pills, with the live
+// count appended to the label when the server has returned statusCounts.
+const statusOptions = computed(() =>
+  STATUS_FILTERS.map((f) => {
+    const c = filterCount(f.value)
+    return { value: f.value, label: c !== null ? `${f.label} (${c})` : f.label }
+  })
+)
 
 const STATUS_STYLES = {
   paid: 'bg-shell text-ink/70',

@@ -20,8 +20,8 @@
     </div>
 
     <template v-else>
-      <!-- filters -->
-      <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <!-- filters — search + a compact labelled Category dropdown -->
+      <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end">
         <div class="relative flex-1 sm:max-w-xs">
           <svg viewBox="0 0 24 24" class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" fill="none" stroke="currentColor" stroke-width="1.8">
             <circle cx="11" cy="11" r="7" />
@@ -35,18 +35,7 @@
           />
         </div>
 
-        <div class="scrollbar-hide flex gap-2 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible">
-          <button
-            v-for="c in CATEGORY_FILTERS"
-            :key="c.value"
-            type="button"
-            class="shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-widest2 transition-colors"
-            :class="activeCategory === c.value ? 'border-ink bg-ink text-cream' : 'border-ink/15 text-ink/60 hover:border-ink/40'"
-            @click="activeCategory = c.value"
-          >
-            {{ c.label }}
-          </button>
-        </div>
+        <AdminFilterSelect label="Category" v-model="activeCategory" :options="CATEGORY_FILTERS" class="sm:w-52" />
       </div>
 
       <p class="mt-5 text-xs font-medium text-ink/40">
