@@ -12,9 +12,14 @@
  *      both DB-backed (serverless-safe). Over the limit => 429.
  *   3. Server-side validation + sanitisation + hard length caps.
  *
- * No raw IP / user-agent is stored. No email is sent (by design, this phase).
+ * No raw IP / user-agent is stored.
  *
- * Isolated: touches only `inquiries` + `inquiry_rate_hits`.
+ * After a successful store, two best-effort emails go out via Brevo (customer
+ * acknowledgment + admin notification). They are NEVER sent for a honeypot or
+ * rejected submission, and a mail failure is logged but never changes the
+ * `{ ok: true }` response — the inquiry is already saved.
+ *
+ * Isolated: touches only `inquiries` + `inquiry_rate_hits` (+ outbound Brevo).
  */
 import { supabaseAdmin } from '../utils/supabaseAdmin.js'
 import { validateInquiry, isHoneypotTripped } from '../utils/inquiryValidation.js'
@@ -24,6 +29,7 @@ import {
   checkInquiryRateLimit,
   recordInquiryRateHit
 } from '../utils/inquiryRateLimit.js'
+import { sendInquiryEmails } from '../utils/inquiryEmails.js'
 
 const GENERIC_ERROR = 'We couldn’t send your message right now. Please try again in a moment.'
 
@@ -56,16 +62,21 @@ export default defineEventHandler(async (event) => {
       return { ok: false, error: 'You’ve sent a few messages already — please wait a little while before sending another.' }
     }
 
-    // 4. Store.
-    const { error: insertError } = await supabase.from('inquiries').insert({
-      first_name: fields.firstName,
-      last_name: fields.lastName,
-      email: fields.email,
-      phone: fields.phone,
-      subject: fields.subject,
-      message: fields.message
-      // status defaults to 'new'; created_at/updated_at default to now()
-    })
+    // 4. Store. `id` is captured server-side for the admin email only — it is
+    //    never added to the response (still `{ ok: true }` and nothing else).
+    const { data: inserted, error: insertError } = await supabase
+      .from('inquiries')
+      .insert({
+        first_name: fields.firstName,
+        last_name: fields.lastName,
+        email: fields.email,
+        phone: fields.phone,
+        subject: fields.subject,
+        message: fields.message
+        // status defaults to 'new'; created_at/updated_at default to now()
+      })
+      .select('id')
+      .single()
 
     if (insertError) {
       console.error('[inquiries] insert failed:', insertError.message)
@@ -75,6 +86,18 @@ export default defineEventHandler(async (event) => {
 
     // 5. Record the accepted submission for the IP signal (best-effort).
     await recordInquiryRateHit(supabase, ipHashValue)
+
+    // 6. Notify — best-effort, never gates the response. The inquiry is stored;
+    //    a Brevo failure is logged inside and swallowed here.
+    await sendInquiryEmails({
+      id: inserted?.id,
+      firstName: fields.firstName,
+      lastName: fields.lastName,
+      email: fields.email,
+      phone: fields.phone,
+      subject: fields.subject,
+      message: fields.message
+    }).catch((err) => console.error('[inquiries] email dispatch error:', err?.message))
 
     return { ok: true }
   } catch (err) {

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { verifyAndMarkPaid } from '../../../utils/go2payVerify.js'
+import { maybeSendPaidOrderEmails } from '../../../utils/paidOrderEmails.js'
 
 /**
  * POST /api/payments/go2pay/[token]
@@ -162,6 +163,21 @@ export default defineEventHandler(async (event) => {
       callbackKeys: bodyKeys,
       ...(r.go2pay?.orderKeys ? { orderKeys: r.go2pay.orderKeys } : {})
     })
+
+    // Paid-order emails — fired whenever this order is (or was just taken) to a
+    // paid state. Fully guarded + idempotent inside (lease + durable marker on
+    // `orders`); never throws, never changes the response we send Go2Pay.
+    const PAID_OUTCOMES = [
+      'marked-paid',
+      'already-paid',
+      'no-longer-pending',
+      'unique-violation-already-final'
+    ]
+    if (PAID_OUTCOMES.includes(r.outcome)) {
+      await maybeSendPaidOrderEmails(supabase, order.id).catch((e) =>
+        console.error('[go2pay callback] paid-email dispatch error:', e?.message)
+      )
+    }
 
     if (m.http !== 200) setResponseStatus(event, m.http)
     return { received: m.received }

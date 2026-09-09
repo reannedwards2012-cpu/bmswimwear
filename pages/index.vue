@@ -195,18 +195,35 @@
           </p>
         </div>
         <div>
-          <form class="flex flex-col gap-3 sm:flex-row" @submit.prevent="subscribed = true">
+          <form class="flex flex-col gap-3 sm:flex-row" novalidate @submit.prevent="onSubscribe">
             <input
-              v-model="email"
+              v-model.trim="email"
               type="email"
               required
+              autocomplete="email"
+              :disabled="newsletterStatus === 'loading'"
               placeholder="Your email address"
-              class="w-full rounded-full border border-cream/25 bg-cream/10 px-5 py-3.5 text-sm text-cream placeholder:text-cream/50 focus:border-cream focus:outline-none"
+              class="w-full rounded-full border border-cream/25 bg-cream/10 px-5 py-3.5 text-sm text-cream placeholder:text-cream/50 focus:border-cream focus:outline-none disabled:opacity-60"
             />
-            <button type="submit" class="btn bg-blush text-ink hover:bg-blush-soft">Subscribe</button>
+            <!-- honeypot: hidden from people, tempting to bots. Left empty by real submissions. -->
+            <div class="hidden" aria-hidden="true">
+              <label>Company
+                <input v-model="newsletterCompany" type="text" tabindex="-1" autocomplete="off" />
+              </label>
+            </div>
+            <button
+              type="submit"
+              class="btn bg-blush text-ink hover:bg-blush-soft disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="newsletterStatus === 'loading' || newsletterStatus === 'done'"
+            >
+              {{ newsletterStatus === 'loading' ? 'Signing you up…' : newsletterStatus === 'done' ? 'Subscribed' : 'Subscribe' }}
+            </button>
           </form>
-          <p v-if="subscribed" class="mt-3 text-xs text-cream/50">
+          <p v-if="newsletterStatus === 'done'" class="mt-3 text-xs text-cream/60">
             You're on the list — see you in your inbox! 🌴
+          </p>
+          <p v-else-if="newsletterStatus === 'error'" class="mt-3 text-xs text-blush-soft">
+            {{ newsletterError }}
           </p>
         </div>
       </div>
@@ -315,7 +332,29 @@ const socials = [
   }
 ]
 
-// Newsletter form (front-end only — intentionally untouched by Inquiry Management).
+// Newsletter signup — wired to POST /api/newsletter (server-side Brevo).
 const email = ref('')
-const subscribed = ref(false)
+const newsletterCompany = ref('') // honeypot
+const newsletterStatus = ref('idle') // 'idle' | 'loading' | 'done' | 'error'
+const newsletterError = ref('')
+
+async function onSubscribe() {
+  if (newsletterStatus.value === 'loading' || newsletterStatus.value === 'done') return
+  newsletterError.value = ''
+  newsletterStatus.value = 'loading'
+  try {
+    await $fetch('/api/newsletter', {
+      method: 'POST',
+      body: { email: email.value, company: newsletterCompany.value }
+    })
+    newsletterStatus.value = 'done'
+  } catch (err) {
+    newsletterStatus.value = 'error'
+    newsletterError.value =
+      err?.data?.error ||
+      (err?.statusCode === 429
+        ? 'You’ve tried a few times — please wait a moment and try again.'
+        : 'We couldn’t sign you up right now. Please try again in a moment.')
+  }
+}
 </script>
