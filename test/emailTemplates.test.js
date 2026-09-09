@@ -40,14 +40,31 @@ describe('email templates — shared rules', () => {
 })
 
 describe('inquiryAckEmail', () => {
-  it('greets by first name when available, confirms receipt, promises no specific time', () => {
+  it('greets by first name, confirms receipt, promises no specific time, signs off as Reann', () => {
     const e = inquiryAckEmail({ firstName: 'Reann' })
     expect(e.html).toContain('Hi Reann,')
-    expect(ALL(e).toLowerCase()).toContain('in touch')
+    const body = ALL(e).toLowerCase()
+    expect(body).toContain('your message is in')
+    expect(body).toContain('get back to you soon')
+    expect(body).toContain('just reply to this email')
+    expect(ALL(e)).toContain('Talk soon,')
+    expect(ALL(e)).toContain('Reann')
+    expect(ALL(e)).toContain('Bahama Mama Swimwear')
     expect(ALL(e)).not.toMatch(/\b(24 hours|48 hours|business days?)\b/i)
   })
   it('falls back to a generic greeting without a first name', () => {
     expect(inquiryAckEmail({}).html).toContain('Hi there,')
+  })
+  it('HTML and plain-text carry the same copy', () => {
+    const e = inquiryAckEmail({ firstName: 'Reann' })
+    for (const line of [
+      'Thanks for reaching out! Your message is in and we’ll get back to you soon.',
+      'If there’s anything else you’d like to add in the meantime, just reply to this email.'
+    ]) {
+      expect(e.html).toContain(line)
+      expect(e.text).toContain(line)
+    }
+    expect(e.text).toContain('Talk soon,\nReann\nBahama Mama Swimwear')
   })
 })
 

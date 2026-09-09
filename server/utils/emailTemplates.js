@@ -101,22 +101,21 @@ export function inquiryAckEmail({ firstName } = {}) {
   const heading = 'We received your message'
   const bodyHtml = [
     para(hi),
-    para(
-      `Thanks for reaching out to ${SITE_NAME}. Your message has landed safely in our inbox and a real person will be in touch soon.`
-    ),
-    para(`If you need to add anything, just reply to this email.`),
-    para(`Warmly,<br><span style="color:${C.accent};">The Bahama Mama team</span>`)
+    para(`Thanks for reaching out! Your message is in and we’ll get back to you soon.`),
+    para(`If there’s anything else you’d like to add in the meantime, just reply to this email.`),
+    para(`Talk soon,<br>Reann<br><span style="color:${C.accent};">Bahama Mama Swimwear</span>`)
   ].join('')
 
   const text = [
     hi,
     '',
-    `Thanks for reaching out to ${SITE_NAME}. Your message has landed safely in our inbox and a real person will be in touch soon.`,
+    'Thanks for reaching out! Your message is in and we’ll get back to you soon.',
     '',
-    'If you need to add anything, just reply to this email.',
+    'If there’s anything else you’d like to add in the meantime, just reply to this email.',
     '',
-    'Warmly,',
-    'The Bahama Mama team'
+    'Talk soon,',
+    'Reann',
+    'Bahama Mama Swimwear'
   ].join('\n')
 
   return {
