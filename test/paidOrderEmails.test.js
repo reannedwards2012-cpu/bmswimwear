@@ -13,13 +13,17 @@ const ORDER_ROW = {
   email: 'reann@example.com',
   phone: '+1473',
   delivery_method: 'shipping',
+  shipping_zone: 'usa',
   shipping_address1: '1 Palm Rd',
   shipping_address2: null,
-  shipping_city: 'St. George',
-  shipping_region: null,
-  shipping_postal_code: null,
-  shipping_country: 'Grenada',
+  shipping_city: 'Miami',
+  shipping_region: 'FL',
+  shipping_postal_code: '33101',
+  shipping_country: 'United States',
   subtotal_usd_cents: 24000,
+  shipping_usd_cents: 1889,
+  total_usd_cents: 25889,
+  billable_weight_lb: 2,
   order_items: [
     { product_name: 'Reef One-Piece', quantity: 2, size: 'M', colour_name: 'Coral', coverage: 'Full' }
   ]
@@ -158,7 +162,7 @@ describe('maybeSendPaidOrderEmails — manual / offline orders', () => {
 })
 
 describe('buildOrderView', () => {
-  it('maps a DB row to the template view; shipping only for shipping orders', () => {
+  it('maps a DB row to the template view with subtotal / shipping / total + delivery label', () => {
     const v = buildOrderView(ORDER_ROW)
     expect(v.orderNumber).toBe('BM-000007')
     expect(v.items[0]).toEqual({
@@ -168,9 +172,42 @@ describe('buildOrderView', () => {
       colour: 'Coral',
       coverage: 'Full'
     })
-    expect(v.shipping).toMatchObject({ address1: '1 Palm Rd', country: 'Grenada' })
+    expect(v.subtotalUsdCents).toBe(24000)
+    expect(v.shippingUsdCents).toBe(1889)
+    expect(v.totalUsdCents).toBe(25889)
+    expect(v.deliveryLabel).toBe('International Shipping')
+    expect(v.zoneLabel).toBe('USA')
+    expect(v.shipping).toMatchObject({ address1: '1 Palm Rd', country: 'United States' })
+  })
 
-    const pickup = buildOrderView({ ...ORDER_ROW, delivery_method: 'pickup' })
-    expect(pickup.shipping).toBeNull()
+  it('Grenada local delivery → $0 shipping, "Local Delivery", address kept', () => {
+    const v = buildOrderView({
+      ...ORDER_ROW,
+      shipping_zone: 'local',
+      shipping_usd_cents: 0,
+      total_usd_cents: 24000,
+      billable_weight_lb: null,
+      shipping_country: 'Grenada',
+      shipping_region: 'Saint George'
+    })
+    expect(v.shippingUsdCents).toBe(0)
+    expect(v.totalUsdCents).toBe(24000)
+    expect(v.deliveryLabel).toBe('Local Delivery')
+    expect(v.zoneLabel).toBeNull()
+    expect(v.shipping).toMatchObject({ country: 'Grenada' })
+  })
+
+  it('legacy pickup row (no address, no zone) → no shipping block, falls back to subtotal', () => {
+    const legacy = buildOrderView({
+      ...ORDER_ROW,
+      delivery_method: 'pickup',
+      shipping_zone: null,
+      shipping_usd_cents: null,
+      total_usd_cents: null,
+      shipping_address1: null
+    })
+    expect(legacy.shipping).toBeNull()
+    expect(legacy.deliveryLabel).toBe('Pickup')
+    expect(legacy.totalUsdCents).toBe(24000) // subtotal fallback
   })
 })

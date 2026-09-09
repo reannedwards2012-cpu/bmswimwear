@@ -38,6 +38,7 @@ import { ORDER_DETAIL_SELECT, formatOrderNumber } from './orderMappers.js'
 import { sendTransactionalEmail } from './brevo.js'
 import { orderConfirmationEmail, orderAdminEmail } from './emailTemplates.js'
 import { siteUrl } from './siteUrl.js'
+import { deliveryLabel, zoneLabel } from './shipping.js'
 
 const ADMIN_EMAIL = 'hello@bmswimwear.com'
 const LEASE_MS = 3 * 60 * 1000
@@ -205,6 +206,9 @@ export function buildOrderView(order) {
     coverage: it.coverage || null
   }))
 
+  const subtotalUsdCents = order.subtotal_usd_cents ?? 0
+  const shippingUsdCents = order.shipping_usd_cents ?? 0
+
   return {
     orderNumber: formatOrderNumber(order.order_number),
     firstName: order.first_name || null,
@@ -212,18 +216,24 @@ export function buildOrderView(order) {
     email: order.email || null,
     phone: order.phone || null,
     items,
-    totalUsdCents: order.subtotal_usd_cents,
-    deliveryMethod: order.delivery_method,
-    shipping:
-      order.delivery_method === 'shipping'
-        ? {
-            address1: order.shipping_address1,
-            address2: order.shipping_address2,
-            city: order.shipping_city,
-            region: order.shipping_region,
-            postalCode: order.shipping_postal_code,
-            country: order.shipping_country
-          }
-        : null
+    subtotalUsdCents,
+    shippingUsdCents,
+    // Fall back to subtotal for pre-shipping historical orders (total NULL).
+    totalUsdCents: order.total_usd_cents ?? subtotalUsdCents + shippingUsdCents,
+    deliveryLabel: deliveryLabel(order.shipping_zone, order.delivery_method),
+    zoneLabel: zoneLabel(order.shipping_zone),
+    shippingZone: order.shipping_zone ?? null,
+    // Address is present for every real delivery (local or international);
+    // only legacy 'pickup' rows have none.
+    shipping: order.shipping_address1
+      ? {
+          address1: order.shipping_address1,
+          address2: order.shipping_address2,
+          city: order.shipping_city,
+          region: order.shipping_region,
+          postalCode: order.shipping_postal_code,
+          country: order.shipping_country
+        }
+      : null
   }
 }

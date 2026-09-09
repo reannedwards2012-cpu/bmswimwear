@@ -2,20 +2,27 @@
  * Server-side checkout validation + authoritative order building.
  *
  * Pure module (no Nitro/Supabase imports) so it can be unit-tested directly.
- * NOTHING from the client payload is trusted for money, names or images.
+ * NOTHING from the client payload is trusted for money, names, images,
+ * product weights, shipping rates, shipping zone or the payable total.
  *
  * The authoritative product data is passed in as `catalogue` — a
  * `Map<slug, entry>` the caller builds from live Supabase data
  * (server/utils/productCatalogue.js). Entry shape:
- *   { id, title, price, priceXcd, sizes: string[], coverage: string[], colours: [{id,name}] }
- * (price/priceXcd in dollars). A product missing from the map — inactive, or
- * simply not a real product — is rejected exactly as an unknown product was
- * before. The `colours` list is already filtered to fabrics that are
- * active + available + not 'unavailable' AND compatible with the product,
- * so a stale/incompatible fabric selection is rejected with no extra logic
- * here. This is also what revalidates a cart whose product changed after
- * the item was added — the map is fetched fresh on every checkout attempt.
+ *   { id, title, category, price, priceXcd, sizes: string[], coverage: string[], colours: [{id,name}] }
+ * (price/priceXcd in dollars). `category` drives the authoritative shipping
+ * weight. A product missing from the map — inactive, or simply not a real
+ * product — is rejected exactly as an unknown product was before.
+ *
+ * ── Delivery ──────────────────────────────────────────────────────────────
+ * Every website order now has a delivery address. The delivery method + charge
+ * are DERIVED server-side from the destination (server/utils/shipping.js):
+ *   Grenada (Saint George)  → Local Delivery, US$0
+ *   supported country       → International Shipping, computed from zone+weight
+ *   Grenada other parish / unsupported country → rejected (no order created)
+ * `delivery_method` is stored as 'shipping' for every website order;
+ * `shipping_zone` ('local' | a zone key) is the authoritative discriminator.
  */
+import { resolveDelivery } from './shipping.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -42,8 +49,11 @@ const toCents = (dollars) => Math.round(dollars * 100)
 /**
  * @param {object} payload  the client checkout body
  * @param {Map<string, object>} catalogue  slug -> authoritative product entry (see file header)
- * @returns {{ ok: false, error: string, issues: string[] }}
- *        | {{ ok: true, orderRow: object, itemRows: object[], subtotalUsdCents: number }}
+ * @returns {{ ok: false, error: string, issues: string[], code?: string }}
+ *        | {{ ok: true, orderRow: object, itemRows: object[],
+ *              subtotalUsdCents: number, shippingUsdCents: number, totalUsdCents: number,
+ *              deliveryZone: string, deliveryMethod: string,
+ *              billableWeightLb: number|null, marketingOptIn: boolean }}
  */
 export function buildValidatedOrder(payload, catalogue) {
   const issues = []
@@ -74,53 +84,39 @@ export function buildValidatedOrder(payload, catalogue) {
     issues.push('One or more contact fields are too long.')
   }
 
-  // ── delivery method ───────────────────────────────────
-  const deliveryMethod = str(p.deliveryMethod)
-  if (deliveryMethod !== 'pickup' && deliveryMethod !== 'shipping') {
-    issues.push('Choose a valid delivery method.')
+  // ── delivery address (always required — the method + charge are derived
+  //    from the destination, not chosen by the customer) ──
+  const a = p.shippingAddress && typeof p.shippingAddress === 'object' ? p.shippingAddress : {}
+  const country = str(a.country)
+  const address1 = str(a.address1)
+  const address2 = str(a.address2)
+  const city = str(a.city)
+  const region = str(a.region)
+  const postalCode = str(a.postalCode)
+
+  if (!country) issues.push('Select a country.')
+  if (!address1) issues.push('Enter an address.')
+  if (!city) issues.push('Enter a city or town.')
+  // Grenada = local delivery, and we need the parish to confirm Saint George.
+  if (country === 'Grenada' && !region) issues.push('Select your delivery parish.')
+  if (
+    country.length > MAX.country ||
+    address1.length > MAX.address ||
+    address2.length > MAX.address ||
+    city.length > MAX.city ||
+    region.length > MAX.region ||
+    postalCode.length > MAX.postal
+  ) {
+    issues.push('One or more address fields are too long.')
   }
 
-  // ── shipping address (null unless shipping) ───────────
-  let shipping = {
-    shipping_country: null,
-    shipping_address1: null,
-    shipping_address2: null,
-    shipping_city: null,
-    shipping_region: null,
-    shipping_postal_code: null
-  }
-
-  if (deliveryMethod === 'shipping') {
-    const a = p.shippingAddress && typeof p.shippingAddress === 'object' ? p.shippingAddress : {}
-    const country = str(a.country)
-    const address1 = str(a.address1)
-    const address2 = str(a.address2)
-    const city = str(a.city)
-    const region = str(a.region)
-    const postalCode = str(a.postalCode)
-
-    if (!country) issues.push('Select a country.')
-    if (!address1) issues.push('Enter an address.')
-    if (!city) issues.push('Enter a city or town.')
-    if (
-      country.length > MAX.country ||
-      address1.length > MAX.address ||
-      address2.length > MAX.address ||
-      city.length > MAX.city ||
-      region.length > MAX.region ||
-      postalCode.length > MAX.postal
-    ) {
-      issues.push('One or more address fields are too long.')
-    }
-
-    shipping = {
-      shipping_country: country || null,
-      shipping_address1: address1 || null,
-      shipping_address2: address2 || null,
-      shipping_city: city || null,
-      shipping_region: region || null,
-      shipping_postal_code: postalCode || null
-    }
+  const shipping = {
+    shipping_country: country || null,
+    shipping_address1: address1 || null,
+    shipping_address2: address2 || null,
+    shipping_city: city || null,
+    shipping_region: region || null,
+    shipping_postal_code: postalCode || null
   }
 
   // ── notes ─────────────────────────────────────────────
@@ -204,6 +200,7 @@ export function buildValidatedOrder(payload, catalogue) {
   // ── authoritative rows + server-calculated subtotal ──
   let subtotalUsdCents = 0
   const itemRows = []
+  const deliveryItems = [] // { category, quantity } for the shipping engine
 
   for (const line of merged.values()) {
     const { product, quantity } = line
@@ -212,6 +209,7 @@ export function buildValidatedOrder(payload, catalogue) {
     const unitXcdCents = toCents(product.priceXcd)
 
     subtotalUsdCents += unitUsdCents * quantity
+    deliveryItems.push({ category: product.category, quantity })
 
     itemRows.push({
       product_id: product.id,
@@ -227,20 +225,58 @@ export function buildValidatedOrder(payload, catalogue) {
     })
   }
 
+  // ── authoritative delivery + shipping charge (server-derived only) ──
+  const delivery = resolveDelivery({ country, region, items: deliveryItems })
+  if (!delivery.ok) {
+    return {
+      ok: false,
+      error: delivery.error,
+      issues: [delivery.error],
+      code: delivery.code,
+      ...(delivery.detail ? { detail: delivery.detail } : {})
+    }
+  }
+
+  const shippingUsdCents = delivery.shippingUsdCents
+  const totalUsdCents = subtotalUsdCents + shippingUsdCents
+
   const orderRow = {
     checkout_idempotency_key: checkoutId,
     first_name: firstName,
     last_name: lastName,
     email,
     phone,
-    delivery_method: deliveryMethod,
+    // Every website order is stored as 'shipping'; shipping_zone is the real
+    // delivery-type discriminator ('local' = Grenada St. George local delivery).
+    delivery_method: 'shipping',
     ...shipping,
     notes,
     subtotal_usd_cents: subtotalUsdCents,
+    shipping_usd_cents: shippingUsdCents,
+    total_usd_cents: totalUsdCents,
+    shipping_zone: delivery.zone,
+    billable_weight_lb: delivery.billableWeightLb,
+    // Persisted consent record. The Brevo List #3 subscription is applied only
+    // after the order is verified paid (server/utils/checkoutNewsletter.js).
+    marketing_opt_in: p.marketingOptIn === true,
     status: 'pending',
     payment_provider: null,
     payment_id: null
   }
 
-  return { ok: true, orderRow, itemRows, subtotalUsdCents }
+  // Explicit opt-in only. Any other value (missing, false, 'true', 1) = no.
+  const marketingOptIn = orderRow.marketing_opt_in
+
+  return {
+    ok: true,
+    orderRow,
+    itemRows,
+    subtotalUsdCents,
+    shippingUsdCents,
+    totalUsdCents,
+    deliveryZone: delivery.zone,
+    deliveryMethod: delivery.method,
+    billableWeightLb: delivery.billableWeightLb,
+    marketingOptIn
+  }
 }

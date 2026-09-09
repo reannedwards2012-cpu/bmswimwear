@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { verifyAndMarkPaid } from '../../../utils/go2payVerify.js'
 import { maybeSendPaidOrderEmails } from '../../../utils/paidOrderEmails.js'
+import { maybeSyncPaidOrderMarketing } from '../../../utils/checkoutNewsletter.js'
 
 /**
  * POST /api/payments/go2pay/[token]
@@ -14,7 +15,9 @@ import { maybeSendPaidOrderEmails } from '../../../utils/paidOrderEmails.js'
  *   - the order exists under our account
  *   - status PAID
  *   - currency USD
- *   - authoritative amount === our server-calculated subtotal_usd_cents
+ *   - authoritative amount === our server-calculated total_usd_cents
+ *     (product subtotal + shipping; falls back to subtotal_usd_cents only for
+ *     pre-shipping historical orders where total_usd_cents is NULL)
  *   - customer email matches
  *   - (if present) provider timestamp not before our order creation
  * Processing is idempotent; a repeat callback for a paid order is a no-op.
@@ -122,7 +125,7 @@ export default defineEventHandler(async (event) => {
     const found = await supabase
       .from('orders')
       .select(
-        'id, order_number, status, email, subtotal_usd_cents, go2pay_order_id, go2pay_request_id, created_at'
+        'id, order_number, status, email, subtotal_usd_cents, total_usd_cents, go2pay_order_id, go2pay_request_id, created_at'
       )
       .eq('payment_callback_token', token)
       .maybeSingle()
@@ -176,6 +179,12 @@ export default defineEventHandler(async (event) => {
     if (PAID_OUTCOMES.includes(r.outcome)) {
       await maybeSendPaidOrderEmails(supabase, order.id).catch((e) =>
         console.error('[go2pay callback] paid-email dispatch error:', e?.message)
+      )
+      // Persisted checkout marketing opt-in → Brevo List #3, once, only now that
+      // the order is verified paid. Idempotent + best-effort; cannot affect the
+      // response, the paid status or the confirmation email.
+      await maybeSyncPaidOrderMarketing(supabase, order.id).catch((e) =>
+        console.error('[go2pay callback] marketing sync error:', e?.message)
       )
     }
 

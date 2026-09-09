@@ -24,7 +24,8 @@ const toCents = (v) => {
 /**
  * @param supabase       server admin client
  * @param order          orders row: { id, status, email, subtotal_usd_cents,
- *                       go2pay_order_id, go2pay_request_id, created_at }
+ *                       total_usd_cents, go2pay_order_id, go2pay_request_id,
+ *                       created_at }
  * @param go2payOrderId  the Go2Pay order id to verify against
  * @returns {{
  *   outcome: 'already-paid'|'bound-to-different-go2pay-order'|'get-orders-failed'
@@ -70,6 +71,9 @@ export async function verifyAndMarkPaid(supabase, order, go2payOrderId) {
   const g = lookup.data
   const gAmountCents = toCents(g.subtotal ?? g.price)
   const gPaymentId = norm(g.payment_id) || null
+  // What we actually charged: product subtotal + shipping. Falls back to
+  // subtotal_usd_cents only for pre-shipping historical orders (total NULL).
+  const expectedAmountCents = order.total_usd_cents ?? order.subtotal_usd_cents
   const gTimestamp = g.paid_at ?? g.created ?? g.created_at ?? null
   const gLinkId = g.product_id ?? null
 
@@ -79,7 +83,7 @@ export async function verifyAndMarkPaid(supabase, order, go2payOrderId) {
   const checks = {
     status: upper(g.status) === 'PAID',
     currency: upper(g.currency) === 'USD',
-    amount: Number.isFinite(gAmountCents) && gAmountCents === order.subtotal_usd_cents,
+    amount: Number.isFinite(gAmountCents) && gAmountCents === expectedAmountCents,
     // Go2Pay stores our Payment Request id in the order's `product_id` field for
     // request-originated orders (order.request_id is ""). MANDATORY, fail closed.
     requestLink:

@@ -38,7 +38,7 @@
               </span>
             </div>
             <p class="mt-0.5 text-xs text-ink/45">
-              {{ formatDate(o.createdAt) }} · {{ o.deliveryMethod === 'shipping' ? 'Delivery' : 'Pickup' }}
+              {{ formatDate(o.createdAt) }} · {{ o.deliveryLabel || (o.deliveryMethod === 'shipping' ? 'Delivery' : 'Pickup') }}
             </p>
 
             <ul class="mt-4 divide-y divide-ink/10 border-t border-ink/10">
@@ -66,9 +66,19 @@
               </li>
             </ul>
 
-            <div class="mt-3 flex items-center justify-between border-t border-ink/10 pt-3 text-sm">
-              <span class="text-ink/60">Subtotal</span>
-              <span class="font-semibold text-ink">{{ subtotalAmount(o) }}</span>
+            <div class="mt-3 space-y-1 border-t border-ink/10 pt-3 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="text-ink/60">Subtotal</span>
+                <span class="font-semibold text-ink">{{ subtotalAmount(o) }}</span>
+              </div>
+              <div v-if="o.totalUsdCents != null" class="flex items-center justify-between">
+                <span class="text-ink/60">Shipping</span>
+                <span class="font-semibold text-ink">{{ shippingAmount(o) }}</span>
+              </div>
+              <div v-if="o.totalUsdCents != null" class="flex items-center justify-between border-t border-ink/10 pt-1">
+                <span class="font-semibold text-ink">Total</span>
+                <span class="font-semibold text-ink">{{ totalAmount(o) }}</span>
+              </div>
             </div>
           </li>
         </ul>
@@ -101,6 +111,9 @@ const subtotalAmount = (o) =>
   o.currency === 'XCD'
     ? formatMoney(o.subtotalXcdCents, 'XCD')
     : `USD ${money((o.subtotalUsdCents ?? 0) / 100)}`
+// Shipping/total only exist on USD website orders created since shipping launched.
+const shippingAmount = (o) => `USD ${money((o.shippingUsdCents ?? 0) / 100)}`
+const totalAmount = (o) => `USD ${money((o.totalUsdCents ?? 0) / 100)}`
 
 const { data, pending, error, refresh } = useLazyAsyncData(
   'account-orders',

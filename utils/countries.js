@@ -23,3 +23,19 @@ const REST = [
 ]
 
 export const COUNTRIES = ['Grenada', ...REST]
+
+// Grenada is a local-delivery-only destination (see server/utils/shipping.js).
+export const GRENADA = 'Grenada'
+
+// Parishes of Grenada, for the checkout parish <select> when the country is
+// Grenada. Local delivery is currently offered in Saint George only; the
+// server (server/utils/shipping.js `isStGeorge`) is the authority on that.
+export const GRENADA_PARISHES = [
+  'Saint George',
+  'Saint Andrew',
+  'Saint David',
+  'Saint John',
+  'Saint Mark',
+  'Saint Patrick',
+  'Carriacou & Petite Martinique'
+]

@@ -3,10 +3,11 @@
  * validates a cart against — the Supabase replacement for
  * data/products.js's `getProductById()`.
  *
- * Returns a Map<slug, catalogueEntry> whose entries have the SAME shape
- * buildValidatedOrder() already expects — { id, title, image, price,
- * priceXcd (dollars), sizes[], coverage[], colours:[{id,name}] } — so the
- * validator itself needed only a one-line change (getProductById -> lookup).
+ * Returns a Map<slug, catalogueEntry> whose entries have the shape
+ * buildValidatedOrder() expects — { id, title, category, image, price,
+ * priceXcd (dollars), sizes[], coverage[], colours:[{id,name}] }. `category`
+ * is the authoritative product category that drives shipping weight
+ * (server/utils/shipping.js).
  *
  * All the "is the selected fabric still OK?" rules the Phase C brief asks
  * for are enforced HERE, by which rows make it into `colours`:
@@ -29,7 +30,7 @@ export async function fetchCatalogueForCheckout(supabase, productSlugs) {
   const { data, error } = await supabase
     .from('products')
     .select(`
-      slug, name, price_usd_cents, price_xcd_cents,
+      slug, name, category, price_usd_cents, price_xcd_cents,
       product_sizes(size),
       product_coverages(coverage),
       product_images(image_url, sort_order, is_primary),
@@ -63,6 +64,7 @@ export async function fetchCatalogueForCheckout(supabase, productSlugs) {
     catalogue.set(row.slug, {
       id: row.slug,
       title: row.name,
+      category: row.category, // authoritative — drives shipping weight
       image,
       price: row.price_usd_cents / 100,
       priceXcd: row.price_xcd_cents / 100,

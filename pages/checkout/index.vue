@@ -46,39 +46,8 @@
             </div>
           </section>
 
-          <!-- delivery method -->
+          <!-- delivery address -->
           <section>
-            <h2 class="font-display text-lg font-semibold text-ink">Delivery Method</h2>
-            <div class="mt-4 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Delivery method">
-              <label
-                v-for="m in DELIVERY_METHODS"
-                :key="m.value"
-                class="flex cursor-pointer flex-col rounded-2xl border p-4 transition-colors"
-                :class="
-                  deliveryMethod === m.value
-                    ? 'border-ink bg-cream shadow-card'
-                    : 'border-ink/15 hover:border-ink/40'
-                "
-              >
-                <span class="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="deliveryMethod"
-                    class="accent-coral"
-                    :value="m.value"
-                    :checked="deliveryMethod === m.value"
-                    @change="pickDelivery(m.value)"
-                  >
-                  <span class="text-sm font-semibold text-ink">{{ m.label }}</span>
-                </span>
-                <span class="mt-1 pl-6 text-xs text-ink/55">{{ m.hint }}</span>
-              </label>
-            </div>
-            <p v-if="errors.deliveryMethod" class="mt-2 text-xs text-coral">{{ errors.deliveryMethod }}</p>
-          </section>
-
-          <!-- delivery address (shipping only) -->
-          <section v-if="needsAddress">
             <h2 class="font-display text-lg font-semibold text-ink">Delivery Address</h2>
             <div class="mt-4 space-y-4">
               <label class="block">
@@ -98,12 +67,37 @@
                 <p v-if="errors.country" class="mt-1 text-xs text-coral">{{ errors.country }}</p>
               </label>
 
+              <p v-if="deliveryLabel" class="text-xs leading-relaxed text-ink/60">
+                <span class="font-semibold text-ink/75">{{ deliveryLabel }}</span>
+                <template v-if="isGrenada"> — local delivery is currently available within St. George only.</template>
+              </p>
+
               <CheckoutField label="Address line 1" v-bind="bind(shippingAddress, 'address1')" required autocomplete="address-line1" />
               <CheckoutField label="Address line 2" v-bind="bind(shippingAddress, 'address2')" optional autocomplete="address-line2" />
 
               <div class="grid gap-4 sm:grid-cols-2">
                 <CheckoutField label="City / Town" v-bind="bind(shippingAddress, 'city')" required autocomplete="address-level2" />
-                <CheckoutField label="State / Parish / Province" v-bind="bind(shippingAddress, 'region')" optional autocomplete="address-level1" />
+
+                <label v-if="isGrenada" class="block">
+                  <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Parish</span>
+                  <select
+                    :value="shippingAddress.region"
+                    class="mt-1.5 w-full rounded-2xl border bg-sand/60 px-4 py-2.5 text-sm text-ink focus:outline-none"
+                    :class="errors.region ? 'border-coral' : 'border-ink/15 focus:border-coral'"
+                    @change="pickRegion($event.target.value)"
+                  >
+                    <option value="" disabled>Select a parish</option>
+                    <option v-for="p in GRENADA_PARISHES" :key="p" :value="p">{{ p }}</option>
+                  </select>
+                  <p v-if="errors.region" class="mt-1 text-xs text-coral">{{ errors.region }}</p>
+                </label>
+                <CheckoutField
+                  v-else
+                  label="State / Province / Region"
+                  v-bind="bind(shippingAddress, 'region')"
+                  optional
+                  autocomplete="address-level1"
+                />
               </div>
               <CheckoutField label="Postal / ZIP code" v-bind="bind(shippingAddress, 'postalCode')" optional autocomplete="postal-code" />
             </div>
@@ -150,10 +144,24 @@
               </li>
             </ul>
 
-            <div class="mt-4 flex items-center justify-between border-t border-ink/10 pt-4 text-sm">
-              <span class="text-ink/60">Subtotal</span>
-              <span class="font-semibold text-ink">USD {{ money(subtotalUsd) }}</span>
+            <div class="mt-4 space-y-1.5 border-t border-ink/10 pt-4 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="text-ink/60">Subtotal</span>
+                <span class="font-semibold text-ink">USD {{ money(subtotalUsd) }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-ink/60">Shipping</span>
+                <span class="font-semibold text-ink">{{ shippingDisplay }}</span>
+              </div>
+              <div class="flex items-center justify-between border-t border-ink/10 pt-1.5 text-base">
+                <span class="font-semibold text-ink">Total</span>
+                <span class="font-semibold text-ink">{{ totalDisplay }}</span>
+              </div>
             </div>
+
+            <p v-if="quoteError" class="mt-3 rounded-2xl bg-coral/10 px-4 py-3 text-xs leading-relaxed text-coral">
+              {{ quoteError }}
+            </p>
 
             <p class="mt-4 rounded-2xl bg-cream/70 px-4 py-3 text-xs leading-relaxed text-ink/60">
               <span class="font-semibold text-ink/75">Made to order · {{ turnaround }}</span><br >
@@ -161,10 +169,15 @@
             </p>
           </div>
 
+          <label class="flex items-start gap-2.5 px-1 text-xs leading-relaxed text-ink/70">
+            <input type="checkbox" v-model="marketingOptIn" class="mt-0.5 accent-coral" />
+            <span>Keep me in the loop with new drops, restocks &amp; custom order openings.</span>
+          </label>
+
           <button
             type="submit"
             class="btn-primary w-full shadow-soft disabled:cursor-not-allowed disabled:opacity-60"
-            :disabled="submitting || orderCreated"
+            :disabled="submitting || orderCreated || submitBlocked"
           >
             {{ submitLabel }}
           </button>
@@ -184,11 +197,11 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { MADE_TO_ORDER } from '~/data/constants.js'
 import { formatUsd } from '~/utils/money'
-import { COUNTRIES } from '~/utils/countries'
-import { DELIVERY_METHODS, useCheckout } from '~/composables/useCheckout'
+import { COUNTRIES, GRENADA_PARISHES } from '~/utils/countries'
+import { useCheckout } from '~/composables/useCheckout'
 
 useHead({ title: 'Checkout — Bahama Mama Swimwear' })
 
@@ -196,11 +209,12 @@ const { items, subtotalUsd } = useCart()
 const { user, isLoggedIn, authReady, getAccessToken } = useAuth()
 const {
   customer,
-  deliveryMethod,
   shippingAddress,
   notes,
+  marketingOptIn,
   errors,
-  needsAddress,
+  isGrenada,
+  deliveryLabel,
   clearError,
   validate,
   buildPayload
@@ -212,6 +226,74 @@ const money = formatUsd
 const submitting = ref(false)
 const orderCreated = ref(false)
 const formError = ref('')
+
+// ── live shipping quote (display only — the checkout endpoint recalculates) ──
+const quote = ref(null)
+const quoting = ref(false)
+let quoteTimer = null
+
+function refreshQuote() {
+  clearTimeout(quoteTimer)
+  quoteTimer = setTimeout(async () => {
+    if (!items.value.length || !shippingAddress.country) {
+      quote.value = null
+      return
+    }
+    quoting.value = true
+    try {
+      quote.value = await $fetch('/api/checkout/quote', {
+        method: 'POST',
+        body: {
+          country: shippingAddress.country,
+          region: shippingAddress.region,
+          items: items.value.map((i) => ({ productId: i.productId, quantity: i.quantity }))
+        }
+      })
+    } catch {
+      quote.value = { ok: false, code: 'server', error: 'We couldn’t calculate shipping right now. Please try again.' }
+    } finally {
+      quoting.value = false
+    }
+  }, 400)
+}
+
+watch(
+  () => [
+    shippingAddress.country,
+    shippingAddress.region,
+    items.value.map((i) => `${i.lineId}:${i.quantity}`).join('|')
+  ],
+  refreshQuote,
+  { immediate: true }
+)
+
+const BLOCKING_CODES = ['unsupported_destination', 'grenada_parish', 'weight_config', 'item']
+
+const quoteError = computed(() => {
+  const q = quote.value
+  if (!q || q.ok) return ''
+  if (['no_country', 'empty'].includes(q.code)) return ''
+  return q.error || ''
+})
+
+const submitBlocked = computed(() => {
+  const q = quote.value
+  return !!q && !q.ok && BLOCKING_CODES.includes(q.code)
+})
+
+const shippingDisplay = computed(() => {
+  if (!shippingAddress.country) return '—'
+  if (quoting.value && !quote.value) return 'Calculating…'
+  const q = quote.value
+  if (q && q.ok) return q.shippingUsdCents === 0 ? '$0.00' : `USD ${money(q.shippingUsdCents / 100)}`
+  return '—'
+})
+
+const totalDisplay = computed(() => {
+  const q = quote.value
+  if (q && q.ok) return `USD ${money(q.totalUsdCents / 100)}`
+  return `USD ${money(subtotalUsd.value)}`
+})
 
 const submitLabel = computed(() => {
   if (orderCreated.value) return 'Redirecting to payment…'
@@ -231,18 +313,22 @@ const bind = (obj, key) => ({
   error: errors[key] || ''
 })
 
-function pickDelivery(value) {
-  deliveryMethod.value = value
-  clearError('deliveryMethod')
+function pickCountry(value) {
+  const changed = shippingAddress.country !== value
+  shippingAddress.country = value
+  // The parish <select> and the free-text region field don't share value sets,
+  // so drop a stale region whenever the country changes.
+  if (changed) shippingAddress.region = ''
+  clearError('country')
+  clearError('region')
 }
 
-function pickCountry(value) {
-  shippingAddress.country = value
-  clearError('country')
+function pickRegion(value) {
+  shippingAddress.region = value
+  clearError('region')
 }
 
 async function onSubmit() {
-  // Guard the in-flight window and any post-submit re-trigger.
   if (submitting.value || orderCreated.value) return
 
   formError.value = ''
@@ -251,11 +337,13 @@ async function onSubmit() {
     formError.value = 'Please complete the highlighted fields.'
     return
   }
+  if (submitBlocked.value) {
+    formError.value = quoteError.value || 'We can’t ship to this destination automatically.'
+    return
+  }
 
   submitting.value = true
   try {
-    // Attach the access token when signed in so the server can link the order
-    // to the customer. Guests send no header — checkout is otherwise identical.
     const token = await getAccessToken()
     const res = await $fetch('/api/checkout', {
       method: 'POST',

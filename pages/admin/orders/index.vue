@@ -136,7 +136,7 @@
               <p class="text-xs text-ink/45">{{ o.email || '—' }}</p>
             </div>
             <div class="mt-3 flex items-center justify-between text-sm">
-              <span class="text-ink/60">{{ o.deliveryMethod === 'shipping' ? 'Delivery' : 'Pickup' }}</span>
+              <span class="text-ink/60">{{ o.deliveryLabel || (o.deliveryMethod === 'shipping' ? 'Delivery' : 'Pickup') }}</span>
               <span class="font-semibold text-ink">{{ orderTotal(o) }}</span>
             </div>
             <div v-if="rowActions(o).length" class="mt-4 flex justify-end gap-2">
@@ -236,7 +236,9 @@ const VIEW_TABS = [
 
 const customerName = (o) => [o.firstName, o.lastName].filter(Boolean).join(' ') || '—'
 const orderTotal = (o) =>
-  formatMoney(o.currency === 'XCD' ? o.subtotalXcdCents : o.subtotalUsdCents, o.currency)
+  o.currency === 'XCD'
+    ? formatMoney(o.subtotalXcdCents, 'XCD')
+    : formatMoney(o.totalUsdCents ?? o.subtotalUsdCents, 'USD')
 
 async function authedFetch(url, opts = {}) {
   const token = await getAccessToken()

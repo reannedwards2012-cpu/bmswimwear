@@ -3,18 +3,22 @@
  * emails: inquiry acknowledgment, inquiry admin notification, paid-order
  * confirmation, paid-order admin notification.
  *
- * Pure module — no Nitro / Supabase / Brevo imports — so it unit-tests directly.
+ * Only depends on ./siteUrl.js (also pure — reads process.env) so it still
+ * unit-tests directly.
  *
  * Design: one shared responsive shell. Warm sand background, cream card,
  * cocoa-brown text, coral accent — the site's own direction, kept deliberately
- * simple. Table layout + inline styles for mail-client compatibility. No image
- * assets, no web fonts. Every builder returns { subject, html, text } with the
- * plain-text part always populated.
+ * simple. Table layout + inline styles for mail-client compatibility, no web
+ * fonts. The header shows the hosted Bahama Mama logo when a public site URL is
+ * configured (customer-facing emails), else a text wordmark — the same wordmark
+ * the admin emails always use. Every builder returns { subject, html, text }
+ * with the plain-text part always populated.
  *
  * These are all transactional and carry NO unsubscribe / marketing language.
  * The newsletter welcome email is NOT here — it is a Brevo Automation on
  * List #3, so Brevo owns its content and its (marketing) unsubscribe.
  */
+import { siteUrl } from './siteUrl.js'
 
 const C = {
   bg: '#FAF2EA', // sand — page
@@ -49,11 +53,43 @@ export function usd(cents) {
 
 const para = (html) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:${C.ink};">${html}</p>`
 
+// Header wordmark — the fallback, and what the admin emails always use.
+const TEXT_WORDMARK =
+  `<span style="font-family:${SERIF};font-size:20px;font-weight:bold;letter-spacing:0.5px;color:${C.ink};">Bahama&nbsp;Mama</span>` +
+  `<span style="font-family:${SERIF};font-size:20px;font-weight:bold;color:${C.accent};">&nbsp;Swimwear</span>`
+
+// The site's canonical logo (same file components/BrandLogo.vue + Footer.vue use).
+// 2304×902 source → shown at 180×70 (same 2.55:1 ratio), centered, modest.
+const LOGO_PATH = '/images/bmlogo.png'
+const LOGO_W = 180
+const LOGO_H = 70
+
+/**
+ * Header brand mark. Email clients can't load a relative /... path, so the logo
+ * needs an absolute URL built from the production site origin (SITE_URL / URL,
+ * via siteUrl()). If that can't be resolved (e.g. local dev with neither var
+ * set) fall back to the text wordmark rather than emit a broken image.
+ */
+function brandHeader() {
+  let origin
+  try {
+    origin = siteUrl()
+  } catch {
+    return TEXT_WORDMARK
+  }
+  const src = esc(`${origin}${LOGO_PATH}`)
+  return (
+    `<img src="${src}" alt="Bahama Mama Swimwear" width="${LOGO_W}" height="${LOGO_H}" ` +
+    `style="display:block;margin:0 auto;width:${LOGO_W}px;height:auto;max-width:100%;border:0;outline:none;text-decoration:none;" />`
+  )
+}
+
 /**
  * Wrap body HTML in the shared branded shell.
- * @param {{ heading?: string, bodyHtml: string, preheader?: string }} opts
+ * @param {{ heading?: string, bodyHtml: string, preheader?: string, brand?: string }} opts
+ *        `brand` overrides the header mark (defaults to the text wordmark).
  */
-function shell({ heading, bodyHtml, preheader }) {
+function shell({ heading, bodyHtml, preheader, brand }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -70,8 +106,7 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;"
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;">
         <tr>
           <td style="padding:0 4px 18px;text-align:center;">
-            <span style="font-family:${SERIF};font-size:20px;font-weight:bold;letter-spacing:0.5px;color:${C.ink};">Bahama&nbsp;Mama</span>
-            <span style="font-family:${SERIF};font-size:20px;font-weight:bold;color:${C.accent};">&nbsp;Swimwear</span>
+            ${brand || TEXT_WORDMARK}
           </td>
         </tr>
         <tr>
@@ -120,7 +155,7 @@ export function inquiryAckEmail({ firstName } = {}) {
 
   return {
     subject: `We received your message — ${SITE_NAME}`,
-    html: shell({ heading, bodyHtml, preheader: 'A real person will be in touch soon.' }),
+    html: shell({ heading, bodyHtml, preheader: 'A real person will be in touch soon.', brand: brandHeader() }),
     text
   }
 }
@@ -190,14 +225,39 @@ function shippingLines(shipping) {
  *   orderNumber: string, firstName: ?string, lastName: ?string,
  *   email: ?string, phone: ?string,
  *   items: Array<{ name:string, quantity:number, size:?string, colour:?string, coverage:?string }>,
- *   totalUsdCents: number, deliveryMethod: string,
+ *   subtotalUsdCents: number, shippingUsdCents: number, totalUsdCents: number,
+ *   deliveryLabel: string, zoneLabel: ?string,
  *   shipping: ?{ address1,address2,city,region,postalCode,country }
  * }} OrderView
  */
 
+/** Subtotal / Shipping / Total block, shared by the customer email. Shipping
+ *  is always shown as an amount — $0.00 for local delivery, never "Free". */
+function totalsRowsHtml({ subtotalUsdCents, shippingUsdCents, totalUsdCents }) {
+  const row = (k, v, bold) =>
+    `<tr>
+      <td style="padding:6px 0 0;font-size:14px;${bold ? 'font-weight:bold;' : ''}color:${C.ink};">${k}</td>
+      <td style="padding:6px 0 0;font-size:14px;${bold ? 'font-weight:bold;' : ''}color:${C.ink};text-align:right;white-space:nowrap;">${v}</td>
+    </tr>`
+  return (
+    row('Subtotal', `${esc(usd(subtotalUsdCents))}`) +
+    row('Shipping', `${esc(usd(shippingUsdCents))}`) +
+    row('Total', `${esc(usd(totalUsdCents))} USD`, true)
+  )
+}
+
 // ── Paid order: customer confirmation ──────────────────────────────────────
 export function orderConfirmationEmail(order = {}) {
-  const { orderNumber, firstName, items = [], totalUsdCents, deliveryMethod, shipping } = order
+  const {
+    orderNumber,
+    firstName,
+    items = [],
+    subtotalUsdCents = 0,
+    shippingUsdCents = 0,
+    totalUsdCents = 0,
+    deliveryLabel = 'Delivery',
+    shipping
+  } = order
   const hi = firstName ? `Hi ${esc(firstName)},` : 'Hi there,'
 
   const itemsHtml = items
@@ -213,22 +273,20 @@ export function orderConfirmationEmail(order = {}) {
     .join('')
 
   const ship = shippingLines(shipping)
-  const deliveryHtml =
-    deliveryMethod === 'shipping' && ship.length
-      ? `Shipping to:<br><span style="color:${C.muted};">${esc(ship.join(', '))}</span>`
-      : `Pickup — we'll be in touch with the details.`
+  const deliveryHtml = ship.length
+    ? `${esc(deliveryLabel)}<br><span style="color:${C.muted};">${esc(ship.join(', '))}</span>`
+    : esc(deliveryLabel)
 
   const bodyHtml = [
     para(hi),
     para(
       `Thank you! Your payment is confirmed and your order <strong>${esc(orderNumber)}</strong> is now in our hands.`
     ),
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 4px;">
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 2px;">
       ${itemsHtml}
-      <tr>
-        <td style="padding:10px 0 0;font-size:14px;font-weight:bold;color:${C.ink};">Total</td>
-        <td style="padding:10px 0 0;font-size:14px;font-weight:bold;color:${C.ink};text-align:right;">${esc(usd(totalUsdCents))} USD</td>
-      </tr>
+    </table>`,
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:2px 0 4px;">
+      ${totalsRowsHtml({ subtotalUsdCents, shippingUsdCents, totalUsdCents })}
     </table>`,
     para(`<span style="font-size:13px;color:${C.muted};">${deliveryHtml}</span>`),
     para(
@@ -248,11 +306,11 @@ export function orderConfirmationEmail(order = {}) {
       return `- ${it.name}${opts ? ` (${opts})` : ''} x ${it.quantity}`
     }),
     '',
+    `Subtotal: ${usd(subtotalUsdCents)}`,
+    `Shipping: ${usd(shippingUsdCents)}`,
     `Total: ${usd(totalUsdCents)} USD`,
     '',
-    deliveryMethod === 'shipping' && ship.length
-      ? `Shipping to: ${ship.join(', ')}`
-      : "Pickup — we'll be in touch with the details.",
+    ship.length ? `${deliveryLabel}: ${ship.join(', ')}` : deliveryLabel,
     '',
     `Every piece is made to order — current turnaround is ${TURNAROUND}, plus delivery time where applicable.`,
     '',
@@ -267,7 +325,8 @@ export function orderConfirmationEmail(order = {}) {
     html: shell({
       heading: 'Payment confirmed',
       bodyHtml,
-      preheader: `Order ${orderNumber} — made to order, ${TURNAROUND}.`
+      preheader: `Order ${orderNumber} — made to order, ${TURNAROUND}.`,
+      brand: brandHeader()
     }),
     text
   }
@@ -282,27 +341,28 @@ export function orderAdminEmail(order = {}, adminUrl) {
     email,
     phone,
     items = [],
-    totalUsdCents,
-    deliveryMethod,
+    subtotalUsdCents = 0,
+    shippingUsdCents = 0,
+    totalUsdCents = 0,
+    deliveryLabel = 'Delivery',
+    zoneLabel,
     shipping
   } = order
   const name = [firstName, lastName].filter(Boolean).join(' ').trim() || '—'
   const ship = shippingLines(shipping)
+  const deliveryValue =
+    (zoneLabel ? `${deliveryLabel} (${zoneLabel})` : deliveryLabel) +
+    (ship.length ? ` — ${ship.join(', ')}` : '')
 
   const rows = [
     ['Order', orderNumber],
     ['Customer', name],
     ['Email', email || '—'],
     ...(phone ? [['Phone', phone]] : []),
+    ['Subtotal', `${usd(subtotalUsdCents)} USD`],
+    ['Shipping', `${usd(shippingUsdCents)} USD`],
     ['Total', `${usd(totalUsdCents)} USD`],
-    [
-      'Delivery',
-      deliveryMethod === 'shipping'
-        ? ship.length
-          ? `Shipping — ${ship.join(', ')}`
-          : 'Shipping'
-        : 'Pickup'
-    ]
+    ['Delivery', deliveryValue]
   ]
 
   const rowsHtml = rows

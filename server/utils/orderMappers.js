@@ -29,9 +29,12 @@
  * transition regardless.
  */
 import { adminTransitionsFor, isManualSource } from './orderStatus.js'
+import { deliveryLabel, zoneLabel } from './shipping.js'
 export const ORDER_DETAIL_SELECT = `
   id, order_number, created_at, updated_at, status, paid_at, archived_at,
   source, currency, payment_method, subtotal_usd_cents, subtotal_xcd_cents,
+  shipping_usd_cents, total_usd_cents, shipping_zone, billable_weight_lb,
+  marketing_opt_in,
   first_name, last_name, email, phone,
   delivery_method, shipping_country, shipping_address1, shipping_address2,
   shipping_city, shipping_region, shipping_postal_code,
@@ -42,7 +45,8 @@ export const ORDER_DETAIL_SELECT = `
 // Light select for the admin list + dashboard recentOrders.
 export const ORDER_LIST_SELECT = `
   id, order_number, created_at, first_name, last_name, email, status, paid_at, archived_at,
-  source, currency, delivery_method, subtotal_usd_cents, subtotal_xcd_cents
+  source, currency, delivery_method, shipping_zone,
+  subtotal_usd_cents, subtotal_xcd_cents, shipping_usd_cents, total_usd_cents
 `.trim()
 
 export const formatOrderNumber = (n) => `BM-${String(n).padStart(6, '0')}`
@@ -59,8 +63,12 @@ export function mapOrderListItem(o) {
     currency: o.currency,
     subtotalUsdCents: o.subtotal_usd_cents,
     subtotalXcdCents: o.subtotal_xcd_cents,
+    shippingUsdCents: o.shipping_usd_cents ?? null,
+    totalUsdCents: o.total_usd_cents ?? null,
+    shippingZone: o.shipping_zone ?? null,
     status: o.status,
     deliveryMethod: o.delivery_method,
+    deliveryLabel: deliveryLabel(o.shipping_zone, o.delivery_method),
     paidAt: o.paid_at,
     archivedAt: o.archived_at ?? null
   }
@@ -82,6 +90,11 @@ export function mapOrderDetail(o) {
     paymentMethod: o.payment_method ?? null,
     subtotalUsdCents: o.subtotal_usd_cents,
     subtotalXcdCents: o.subtotal_xcd_cents,
+    shippingUsdCents: o.shipping_usd_cents ?? null,
+    totalUsdCents: o.total_usd_cents ?? null,
+    shippingZone: o.shipping_zone ?? null,
+    billableWeightLb: o.billable_weight_lb ?? null,
+    marketingOptIn: o.marketing_opt_in ?? false,
     customer: {
       firstName: o.first_name,
       lastName: o.last_name,
@@ -90,6 +103,9 @@ export function mapOrderDetail(o) {
     },
     delivery: {
       deliveryMethod: o.delivery_method,
+      deliveryLabel: deliveryLabel(o.shipping_zone, o.delivery_method),
+      shippingZone: o.shipping_zone ?? null,
+      zoneLabel: zoneLabel(o.shipping_zone),
       shippingCountry: o.shipping_country,
       shippingAddress1: o.shipping_address1,
       shippingAddress2: o.shipping_address2,

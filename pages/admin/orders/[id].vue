@@ -99,9 +99,19 @@
                 </div>
               </li>
             </ul>
-            <div class="mt-4 flex items-center justify-between border-t border-ink/10 pt-4 text-sm">
-              <span class="text-ink/60">Subtotal</span>
-              <span class="font-semibold text-ink">{{ orderTotal }}</span>
+            <div class="mt-4 space-y-1.5 border-t border-ink/10 pt-4 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="text-ink/60">Subtotal</span>
+                <span class="font-semibold text-ink">{{ subtotalAmount }}</span>
+              </div>
+              <div v-if="hasShippingBreakdown" class="flex items-center justify-between">
+                <span class="text-ink/60">Shipping</span>
+                <span class="font-semibold text-ink">{{ shippingAmount }}</span>
+              </div>
+              <div v-if="hasShippingBreakdown" class="flex items-center justify-between border-t border-ink/10 pt-1.5">
+                <span class="font-semibold text-ink">Total</span>
+                <span class="font-semibold text-ink">{{ totalAmount }}</span>
+              </div>
             </div>
           </section>
 
@@ -184,13 +194,17 @@
             <p class="mt-3 text-sm text-ink">{{ [order.customer.firstName, order.customer.lastName].filter(Boolean).join(' ') }}</p>
             <p v-if="order.customer.email" class="mt-1 break-all text-xs text-ink/55">{{ order.customer.email }}</p>
             <p v-if="order.customer.phone" class="mt-1 text-xs text-ink/55">{{ order.customer.phone }}</p>
+            <p v-if="order.marketingOptIn" class="mt-2 text-xs text-ink/45">✓ Opted in to marketing at checkout</p>
           </section>
 
           <!-- delivery -->
           <section class="rounded-4xl bg-cream p-6 shadow-card">
             <h2 class="font-display text-lg font-semibold text-ink">Delivery</h2>
-            <p class="mt-3 text-sm text-ink">{{ order.delivery.deliveryMethod === 'shipping' ? 'Shipping' : 'Pickup' }}</p>
-            <div v-if="order.delivery.deliveryMethod === 'shipping'" class="mt-2 space-y-0.5 text-xs leading-relaxed text-ink/60">
+            <p class="mt-3 text-sm text-ink">
+              {{ order.delivery.deliveryLabel || (order.delivery.deliveryMethod === 'shipping' ? 'Shipping' : 'Pickup') }}
+              <span v-if="order.delivery.zoneLabel" class="text-ink/50">· {{ order.delivery.zoneLabel }} zone</span>
+            </p>
+            <div v-if="order.delivery.shippingAddress1" class="mt-2 space-y-0.5 text-xs leading-relaxed text-ink/60">
               <p>{{ order.delivery.shippingAddress1 }}</p>
               <p v-if="order.delivery.shippingAddress2">{{ order.delivery.shippingAddress2 }}</p>
               <p>
@@ -199,6 +213,9 @@
               <p v-if="order.delivery.shippingPostalCode">{{ order.delivery.shippingPostalCode }}</p>
               <p>{{ order.delivery.shippingCountry }}</p>
             </div>
+            <p v-if="order.billableWeightLb" class="mt-2 text-[0.7rem] text-ink/40">
+              Billable weight: {{ order.billableWeightLb }} lb
+            </p>
           </section>
         </aside>
       </div>
@@ -450,12 +467,20 @@ const paymentMethodLabel = (m) => PAYMENT_METHOD_LABELS[m] || m
 const itemPrice = (it) =>
   formatMoney(order.value?.currency === 'XCD' ? it.unitPriceXcdCents : it.unitPriceUsdCents, order.value?.currency)
 
-const orderTotal = computed(() =>
+const subtotalAmount = computed(() =>
   formatMoney(
     order.value?.currency === 'XCD' ? order.value?.subtotalXcdCents : order.value?.subtotalUsdCents,
     order.value?.currency
   )
 )
+
+// Website orders created since shipping was introduced carry these; manual and
+// pre-shipping historical orders don't — hide the breakdown for those.
+const hasShippingBreakdown = computed(
+  () => order.value?.totalUsdCents != null && order.value?.shippingUsdCents != null
+)
+const shippingAmount = computed(() => formatMoney(order.value?.shippingUsdCents, 'USD'))
+const totalAmount = computed(() => formatMoney(order.value?.totalUsdCents, 'USD'))
 
 const STATUS_STYLES = {
   paid: 'bg-shell text-ink/70',

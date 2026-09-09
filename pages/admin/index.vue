@@ -94,7 +94,9 @@
                 </div>
                 <div class="shrink-0 text-right">
                   <p class="text-sm font-semibold text-ink">
-                    {{ formatMoney(o.currency === 'XCD' ? o.subtotalXcdCents : o.subtotalUsdCents, o.currency) }}
+                    {{ o.currency === 'XCD'
+                      ? formatMoney(o.subtotalXcdCents, 'XCD')
+                      : formatMoney(o.totalUsdCents ?? o.subtotalUsdCents, 'USD') }}
                   </p>
                   <span class="rounded-full px-2.5 py-0.5 text-[0.65rem] font-semibold" :class="statusClass(o.status)">
                     {{ statusLabel(o.status) }}

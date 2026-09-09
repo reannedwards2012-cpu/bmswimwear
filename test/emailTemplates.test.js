@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as templates from '../server/utils/emailTemplates.js'
 import {
   inquiryAckEmail,
@@ -36,6 +36,59 @@ describe('email templates — shared rules', () => {
 
   it('no newsletter/welcome builder is exported (welcome is a Brevo Automation)', () => {
     expect(templates.welcomeEmail).toBeUndefined()
+  })
+})
+
+describe('email header brand mark', () => {
+  const WORDMARK = 'Bahama&nbsp;Mama'
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('customer emails show the hosted logo <img> built from the site URL', () => {
+    vi.stubEnv('SITE_URL', 'https://bmswimwear.com')
+    vi.stubEnv('URL', '')
+
+    for (const e of [
+      inquiryAckEmail({ firstName: 'Reann' }),
+      orderConfirmationEmail({ orderNumber: 'BM-000007', items: [], totalUsdCents: 0 })
+    ]) {
+      expect(e.html).toContain(
+        '<img src="https://bmswimwear.com/images/bmlogo.png" alt="Bahama Mama Swimwear" width="180" height="70"'
+      )
+      expect(e.html).toContain('display:block;margin:0 auto;width:180px;height:auto;max-width:100%')
+      expect(e.html).not.toContain(WORDMARK) // text wordmark replaced
+    }
+  })
+
+  it('strips a trailing slash on the site URL when building the logo src', () => {
+    vi.stubEnv('SITE_URL', 'https://bmswimwear.com/')
+    vi.stubEnv('URL', '')
+    expect(inquiryAckEmail({ firstName: 'R' }).html).toContain(
+      'src="https://bmswimwear.com/images/bmlogo.png"'
+    )
+  })
+
+  it('falls back to the text wordmark (no broken <img>) when no site URL is configured', () => {
+    vi.stubEnv('SITE_URL', '')
+    vi.stubEnv('URL', '')
+    for (const e of [
+      inquiryAckEmail({ firstName: 'Reann' }),
+      orderConfirmationEmail({ orderNumber: 'BM-1', items: [], totalUsdCents: 0 })
+    ]) {
+      expect(e.html).toContain(WORDMARK)
+      expect(e.html).not.toContain('<img')
+    }
+  })
+
+  it('admin emails keep the text wordmark even when the site URL is set', () => {
+    vi.stubEnv('SITE_URL', 'https://bmswimwear.com')
+    vi.stubEnv('URL', '')
+    for (const e of [
+      inquiryAdminEmail({ email: 'a@b.co' }),
+      orderAdminEmail({ orderNumber: 'BM-1', items: [], totalUsdCents: 0 })
+    ]) {
+      expect(e.html).toContain(WORDMARK)
+      expect(e.html).not.toContain('<img')
+    }
   })
 })
 
@@ -94,35 +147,55 @@ describe('inquiryAdminEmail', () => {
 })
 
 describe('orderConfirmationEmail', () => {
-  const order = {
+  const intl = {
     orderNumber: 'BM-000007',
     firstName: 'Reann',
-    items: [
-      { name: 'Reef One-Piece', quantity: 2, size: 'M', colour: 'Coral', coverage: 'Full' }
-    ],
-    totalUsdCents: 24000,
-    deliveryMethod: 'shipping',
-    shipping: { address1: '1 Palm Rd', city: 'St. George', country: 'Grenada' }
+    items: [{ name: 'Reef One-Piece', quantity: 2, size: 'M', colour: 'Coral', coverage: 'Full' }],
+    subtotalUsdCents: 24000,
+    shippingUsdCents: 1889,
+    totalUsdCents: 25889,
+    deliveryLabel: 'International Shipping',
+    zoneLabel: 'USA',
+    shipping: { address1: '1 Palm Rd', city: 'Miami', region: 'FL', country: 'United States' }
   }
-  it('includes order number, item details, USD total, turnaround, reply note and address', () => {
-    const body = ALL(orderConfirmationEmail(order))
+  const local = {
+    orderNumber: 'BM-000008',
+    firstName: 'Ama',
+    items: [{ name: 'Palm Top', quantity: 1 }],
+    subtotalUsdCents: 6000,
+    shippingUsdCents: 0,
+    totalUsdCents: 6000,
+    deliveryLabel: 'Local Delivery',
+    zoneLabel: null,
+    shipping: { address1: '2 Lagoon Rd', city: 'St George', region: 'Saint George', country: 'Grenada' }
+  }
+
+  it('shows Subtotal / Shipping / Total, the delivery label, address, turnaround and reply note', () => {
+    const body = ALL(orderConfirmationEmail(intl))
     expect(body).toContain('BM-000007')
     expect(body).toContain('Reef One-Piece')
-    expect(body).toContain('2') // quantity
     expect(body).toContain('Size M')
-    expect(body).toContain('Coral')
     expect(body).toContain('Full coverage')
+    expect(body).toContain('Subtotal')
     expect(body).toContain('$240.00')
+    expect(body).toContain('Shipping')
+    expect(body).toContain('$18.89')
+    expect(body).toContain('Total')
+    expect(body).toContain('$258.89')
+    expect(body).toContain('International Shipping')
+    expect(body).toContain('1 Palm Rd')
     expect(body).toContain('10–14 business days')
     expect(body.toLowerCase()).toContain('reply to this email')
-    expect(body).toContain('1 Palm Rd')
   })
-  it('shows a pickup line instead of an address for pickup orders', () => {
-    const body = ALL(
-      orderConfirmationEmail({ ...order, deliveryMethod: 'pickup', shipping: null })
-    )
-    expect(body.toLowerCase()).toContain('pickup')
-    expect(body).not.toContain('1 Palm Rd')
+
+  it('Local Delivery shows shipping as $0.00 and NEVER the word "Free"', () => {
+    const body = ALL(orderConfirmationEmail(local))
+    expect(body).toContain('Local Delivery')
+    expect(body).toContain('Shipping')
+    expect(body).toContain('$0.00')
+    expect(body.toLowerCase()).not.toContain('free')
+    expect(body).toContain('Total')
+    expect(body).toContain('$60.00')
   })
 })
 
@@ -134,15 +207,24 @@ describe('orderAdminEmail', () => {
     email: 'reann@example.com',
     phone: '+1473',
     items: [{ name: 'Reef One-Piece', quantity: 1, size: 'M', colour: 'Coral' }],
-    totalUsdCents: 12000,
-    deliveryMethod: 'pickup'
+    subtotalUsdCents: 12000,
+    shippingUsdCents: 1630,
+    totalUsdCents: 13630,
+    deliveryLabel: 'International Shipping',
+    zoneLabel: 'Canada',
+    shipping: { address1: '9 Maple St', city: 'Toronto', region: 'ON', country: 'Canada' }
   }
-  it('includes order number, customer, total, items and an admin link when given', () => {
+  it('includes order number, customer, subtotal/shipping/total, delivery + address, items and admin link', () => {
     const body = ALL(orderAdminEmail(order, 'https://site.test/admin/orders/abc'))
     expect(body).toContain('BM-000007')
     expect(body).toContain('Reann Edwards')
     expect(body).toContain('reann@example.com')
-    expect(body).toContain('$120.00')
+    expect(body).toContain('$120.00') // subtotal
+    expect(body).toContain('$16.30') // shipping
+    expect(body).toContain('$136.30') // total
+    expect(body).toContain('International Shipping')
+    expect(body).toContain('Canada')
+    expect(body).toContain('9 Maple St')
     expect(body).toContain('Reef One-Piece')
     expect(body).toContain('https://site.test/admin/orders/abc')
   })

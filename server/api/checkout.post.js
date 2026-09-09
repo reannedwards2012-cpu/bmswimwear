@@ -41,8 +41,16 @@ async function updateWithRetry(build) {
  * non-null `go2pay_request_id` is never overwritten. A saved request is always
  * reused (state 1) or recovered (state 2) — never replaced.
  *
- * Never trusts client money/names/images. Never returns raw Supabase/Go2Pay
+ * The amount charged to Go2Pay is the server-authoritative
+ * `total_usd_cents` = product subtotal + shipping (buildValidatedOrder /
+ * server/utils/shipping.js). Never trusts client money / names / images /
+ * weights / shipping / zone / total. Never returns raw Supabase/Go2Pay
  * errors, credentials, tokens or callback tokens.
+ *
+ * An explicit checkout marketing opt-in is PERSISTED on the order
+ * (orders.marketing_opt_in). The Brevo List #3 subscription itself is applied
+ * only after Go2Pay has authoritatively verified the order as paid — never at
+ * pending-order creation (server/utils/checkoutNewsletter.js).
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody(event).catch(() => null)
@@ -82,7 +90,7 @@ export default defineEventHandler(async (event) => {
   orderRow.user_id = await getOptionalUserId(event)
 
   const ORDER_COLS =
-    'id, order_number, status, first_name, last_name, email, phone, subtotal_usd_cents, payment_callback_token, go2pay_request_id, go2pay_payment_url'
+    'id, order_number, status, first_name, last_name, email, phone, subtotal_usd_cents, shipping_usd_cents, total_usd_cents, payment_callback_token, go2pay_request_id, go2pay_payment_url'
 
   try {
     const supabase = supabaseAdmin()
@@ -134,11 +142,22 @@ export default defineEventHandler(async (event) => {
           setResponseStatus(event, 500)
           return { success: false, error: GENERIC_ERROR }
         }
+
+        // The checkout marketing opt-in is PERSISTED on the order
+        // (orders.marketing_opt_in, via buildValidatedOrder). The actual Brevo
+        // List #3 subscription is applied only once the Go2Pay callback has
+        // authoritatively verified the order as paid — see
+        // server/utils/checkoutNewsletter.js `maybeSyncPaidOrderMarketing`.
+        // Nothing marketing-related happens here at pending-order creation.
       }
     }
 
     // ── 3. Resolve the Go2Pay Payment Request for this order ──
     const displayOrderNumber = displayNumber(order.order_number)
+    // Authoritative amount to charge = product subtotal + shipping. `total_usd_cents`
+    // is set by buildValidatedOrder for every new website order; the fallback to
+    // `subtotal_usd_cents` only ever applies to a pre-shipping historical row.
+    const chargeUsdCents = order.total_usd_cents ?? order.subtotal_usd_cents
     const savedRequestId = order.go2pay_request_id ?? null
     const savedUrl = order.go2pay_payment_url ?? null
 
@@ -234,7 +253,7 @@ export default defineEventHandler(async (event) => {
         name: requestName,
         email: order.email,
         phone: order.phone,
-        amount: Number((order.subtotal_usd_cents / 100).toFixed(2)),
+        amount: Number((chargeUsdCents / 100).toFixed(2)),
         description: `Bahama Mama Order ${displayOrderNumber}`,
         endpoint: `${base}/api/payments/go2pay/${order.payment_callback_token}`,
         success_url: `${base}/checkout/return?o=${encodeURIComponent(displayOrderNumber)}`,

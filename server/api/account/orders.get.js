@@ -20,6 +20,7 @@
 import { supabaseAdmin } from '../../utils/supabaseAdmin.js'
 import { requireUser } from '../../utils/authUser.js'
 import { claimGuestOrdersForUser } from '../../utils/claimGuestOrders.js'
+import { deliveryLabel, zoneLabel } from '../../utils/shipping.js'
 
 const displayNumber = (n) => `BM-${String(n).padStart(6, '0')}`
 
@@ -49,7 +50,16 @@ export default defineEventHandler(async (event) => {
          currency,
          subtotal_usd_cents,
          subtotal_xcd_cents,
+         shipping_usd_cents,
+         total_usd_cents,
+         shipping_zone,
          delivery_method,
+         shipping_country,
+         shipping_address1,
+         shipping_address2,
+         shipping_city,
+         shipping_region,
+         shipping_postal_code,
          order_items (
            product_name,
            image,
@@ -78,7 +88,23 @@ export default defineEventHandler(async (event) => {
       currency: o.currency ?? 'USD',
       subtotalUsdCents: o.subtotal_usd_cents,
       subtotalXcdCents: o.subtotal_xcd_cents,
+      shippingUsdCents: o.shipping_usd_cents ?? null,
+      totalUsdCents: o.total_usd_cents ?? null,
+      shippingZone: o.shipping_zone ?? null,
       deliveryMethod: o.delivery_method,
+      deliveryLabel: deliveryLabel(o.shipping_zone, o.delivery_method),
+      zoneLabel: zoneLabel(o.shipping_zone),
+      shippingAddress:
+        o.shipping_address1
+          ? {
+              address1: o.shipping_address1,
+              address2: o.shipping_address2 ?? null,
+              city: o.shipping_city ?? null,
+              region: o.shipping_region ?? null,
+              postalCode: o.shipping_postal_code ?? null,
+              country: o.shipping_country ?? null
+            }
+          : null,
       items: (o.order_items ?? []).map((it) => ({
         productName: it.product_name,
         // never surface a custom-order reference/design image to the customer
