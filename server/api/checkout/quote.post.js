@@ -19,8 +19,11 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event).catch(() => null)
   const b = body && typeof body === 'object' ? body : {}
 
-  const country = typeof b.country === 'string' ? b.country.trim() : ''
-  const region = typeof b.region === 'string' ? b.region.trim() : ''
+  // Local delivery is authoritatively Grenada / Saint George — the client's
+  // country/region are ignored for that method (mirrors buildValidatedOrder).
+  const isLocal = (typeof b.deliveryMethod === 'string' ? b.deliveryMethod : '') === 'local_delivery'
+  const country = isLocal ? 'Grenada' : typeof b.country === 'string' ? b.country.trim() : ''
+  const region = isLocal ? 'Saint George' : typeof b.region === 'string' ? b.region.trim() : ''
 
   const wanted = (Array.isArray(b.items) ? b.items : [])
     .map((i) => ({
@@ -29,7 +32,7 @@ export default defineEventHandler(async (event) => {
     }))
     .filter((i) => i.productId && Number.isInteger(i.quantity) && i.quantity > 0 && i.quantity <= 99)
 
-  if (!country) return { ok: false, code: 'no_country', error: 'Select a delivery country.' }
+  if (!isLocal && !country) return { ok: false, code: 'no_country', error: 'Select a delivery country.' }
   if (wanted.length === 0) return { ok: false, code: 'empty', error: 'Your cart is empty.' }
 
   let catalogue

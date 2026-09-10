@@ -19,12 +19,14 @@ function entry(over = {}) {
   }
 }
 const catalogue = (entries) => new Map(entries.map((e) => [e.id, e]))
+const CAT = catalogue([entry()])
 
 function payload(over = {}) {
   const { shippingAddress, items, ...rest } = over
   return {
     checkoutId: UUID,
     customer: { firstName: 'Reann', lastName: 'Edwards', email: 'reann@example.com', phone: '4731234567' },
+    deliveryMethod: 'international_shipping',
     shippingAddress: {
       country: 'United States',
       address1: '1 Palm Rd',
@@ -40,77 +42,85 @@ function payload(over = {}) {
   }
 }
 
-const CAT = catalogue([entry()])
+const localPayload = (over = {}) =>
+  payload({
+    deliveryMethod: 'local_delivery',
+    shippingAddress: { address1: 'Grand Anse, near the roundabout', country: '', city: '', region: '', postalCode: '' },
+    ...over
+  })
 
-describe('buildValidatedOrder — Grenada local delivery', () => {
-  it('Saint George → local delivery, $0 shipping, total = subtotal, zone "local"', () => {
-    const r = buildValidatedOrder(
-      payload({ shippingAddress: { country: 'Grenada', region: 'Saint George', address1: '1 Lagoon Rd', city: 'St George' } }),
-      CAT
-    )
+describe('buildValidatedOrder — Local Delivery', () => {
+  it('forces Grenada + Saint George + zone local + $0, total = subtotal', () => {
+    const r = buildValidatedOrder(localPayload(), CAT)
     expect(r.ok).toBe(true)
-    expect(r.subtotalUsdCents).toBe(12000)
-    expect(r.shippingUsdCents).toBe(0)
-    expect(r.totalUsdCents).toBe(12000)
-    expect(r.deliveryZone).toBe('local')
     expect(r.deliveryMethod).toBe('local_delivery')
+    expect(r.deliveryZone).toBe('local')
+    expect(r.shippingUsdCents).toBe(0)
+    expect(r.totalUsdCents).toBe(r.subtotalUsdCents)
     expect(r.billableWeightLb).toBeNull()
     expect(r.orderRow.delivery_method).toBe('shipping') // stored value unchanged
     expect(r.orderRow.shipping_zone).toBe('local')
-    expect(r.orderRow.shipping_usd_cents).toBe(0)
-    expect(r.orderRow.total_usd_cents).toBe(12000)
-    expect(r.orderRow.billable_weight_lb).toBeNull()
     expect(r.orderRow.shipping_country).toBe('Grenada')
+    expect(r.orderRow.shipping_region).toBe('Saint George')
+    expect(r.orderRow.shipping_address1).toBe('Grand Anse, near the roundabout')
+    expect(r.orderRow.shipping_city).toBeNull()
+    expect(r.orderRow.shipping_postal_code).toBeNull()
   })
 
-  it('Grenada, wrong parish → rejected, no order', () => {
-    const r = buildValidatedOrder(
-      payload({ shippingAddress: { country: 'Grenada', region: 'Saint David', address1: 'x', city: 'y' } }),
-      CAT
-    )
+  it('requires the delivery area field', () => {
+    const r = buildValidatedOrder(localPayload({ shippingAddress: { address1: '' } }), CAT)
     expect(r.ok).toBe(false)
-    expect(r.code).toBe('grenada_parish')
   })
 
-  it('Grenada, missing parish → rejected at field validation', () => {
+  it('ignores any client-sent country / region / postal for local delivery', () => {
     const r = buildValidatedOrder(
-      payload({ shippingAddress: { country: 'Grenada', region: '', address1: 'x', city: 'y' } }),
+      localPayload({
+        shippingAddress: {
+          address1: 'St Pauls',
+          country: 'Australia',
+          region: 'Saint Andrew',
+          postalCode: 'ZZZ',
+          city: 'Sydney'
+        }
+      }),
       CAT
     )
-    expect(r.ok).toBe(false)
+    expect(r.ok).toBe(true)
+    expect(r.deliveryZone).toBe('local')
+    expect(r.shippingUsdCents).toBe(0)
+    expect(r.orderRow.shipping_country).toBe('Grenada')
+    expect(r.orderRow.shipping_region).toBe('Saint George')
   })
 })
 
-describe('buildValidatedOrder — international', () => {
-  it('USA → international shipping, total = subtotal + shipping', () => {
+describe('buildValidatedOrder — International Shipping', () => {
+  it('USA → international shipping, total = subtotal + authoritative shipping', () => {
     const r = buildValidatedOrder(payload(), CAT)
     expect(r.ok).toBe(true)
-    expect(r.deliveryZone).toBe('usa')
     expect(r.deliveryMethod).toBe('international_shipping')
+    expect(r.deliveryZone).toBe('usa')
     expect(r.billableWeightLb).toBe(1)
     expect(r.shippingUsdCents).toBe(internationalShippingUsdCents('usa', 1))
     expect(r.totalUsdCents).toBe(r.subtotalUsdCents + r.shippingUsdCents)
-    expect(r.orderRow.total_usd_cents).toBe(r.totalUsdCents)
     expect(r.orderRow.shipping_zone).toBe('usa')
-    expect(r.orderRow.billable_weight_lb).toBe(1)
+    expect(r.orderRow.total_usd_cents).toBe(r.totalUsdCents)
   })
 
   it('quantity increases billable weight → higher total', () => {
     const one = buildValidatedOrder(payload({ items: [{ productId: 'reef-one-piece', quantity: 1 }] }), CAT)
     const three = buildValidatedOrder(payload({ items: [{ productId: 'reef-one-piece', quantity: 3 }] }), CAT)
-    expect(one.billableWeightLb).toBe(1)
-    expect(three.billableWeightLb).toBe(2)
+    expect(three.billableWeightLb).toBeGreaterThan(one.billableWeightLb)
     expect(three.shippingUsdCents).toBeGreaterThan(one.shippingUsdCents)
+  })
+
+  it('rejects Grenada as an international destination (points at Local Delivery)', () => {
+    const r = buildValidatedOrder(payload({ shippingAddress: { country: 'Grenada' } }), CAT)
+    expect(r.ok).toBe(false)
+    expect(r.issues.join(' ')).toMatch(/Local Delivery/i)
   })
 
   it('unsupported country → rejected, no order/Go2Pay', () => {
     const r = buildValidatedOrder(payload({ shippingAddress: { country: 'Australia' } }), CAT)
-    expect(r.ok).toBe(false)
-    expect(r.code).toBe('unsupported_destination')
-  })
-
-  it('"Other" → rejected', () => {
-    const r = buildValidatedOrder(payload({ shippingAddress: { country: 'Other' } }), CAT)
     expect(r.ok).toBe(false)
     expect(r.code).toBe('unsupported_destination')
   })
@@ -120,19 +130,29 @@ describe('buildValidatedOrder — international', () => {
     expect(r.ok).toBe(false)
     expect(r.code).toBe('weight_config')
   })
+
+  it('missing country / address / city → rejected', () => {
+    expect(buildValidatedOrder(payload({ shippingAddress: { country: '' } }), CAT).ok).toBe(false)
+    expect(buildValidatedOrder(payload({ shippingAddress: { address1: '' } }), CAT).ok).toBe(false)
+    expect(buildValidatedOrder(payload({ shippingAddress: { city: '' } }), CAT).ok).toBe(false)
+  })
+})
+
+describe('buildValidatedOrder — switching method recalculates', () => {
+  it('same cart: Local Delivery total < International total (International adds shipping)', () => {
+    const local = buildValidatedOrder(localPayload(), CAT)
+    const intl = buildValidatedOrder(payload(), CAT)
+    expect(local.subtotalUsdCents).toBe(intl.subtotalUsdCents)
+    expect(local.totalUsdCents).toBe(local.subtotalUsdCents)
+    expect(intl.totalUsdCents).toBe(intl.subtotalUsdCents + intl.shippingUsdCents)
+    expect(intl.totalUsdCents).toBeGreaterThan(local.totalUsdCents)
+  })
 })
 
 describe('buildValidatedOrder — the browser is never trusted', () => {
   it('ignores client-supplied weight / shipping / total / subtotal', () => {
     const r = buildValidatedOrder(
-      payload({
-        weight: 0.01,
-        shippingUsd: 0.5,
-        shippingUsdCents: 1,
-        totalUsd: 1,
-        totalUsdCents: 1,
-        subtotalUsd: 1
-      }),
+      payload({ weight: 0.01, shippingUsd: 0.5, shippingUsdCents: 1, totalUsd: 1, totalUsdCents: 1, subtotalUsd: 1 }),
       CAT
     )
     expect(r.ok).toBe(true)

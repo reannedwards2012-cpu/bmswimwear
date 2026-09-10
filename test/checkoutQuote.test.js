@@ -29,9 +29,9 @@ afterEach(() => {
 })
 
 describe('POST /api/checkout/quote', () => {
-  it('Grenada / St. George → local delivery, $0 shipping, total = subtotal', async () => {
+  it('local_delivery → local, $0 shipping, total = subtotal (client country/region ignored)', async () => {
     const handler = await loadHandler()
-    const res = await handler(ev({ country: 'Grenada', region: 'Saint George', items }))
+    const res = await handler(ev({ deliveryMethod: 'local_delivery', country: 'Australia', region: 'x', items }))
     expect(res).toMatchObject({
       ok: true,
       method: 'local_delivery',
@@ -43,7 +43,7 @@ describe('POST /api/checkout/quote', () => {
 
   it('international → shipping computed, total = subtotal + shipping', async () => {
     const handler = await loadHandler()
-    const res = await handler(ev({ country: 'United States', region: 'FL', items }))
+    const res = await handler(ev({ deliveryMethod: 'international_shipping', country: 'United States', region: 'FL', items }))
     expect(res.ok).toBe(true)
     expect(res.shippingUsdCents).toBe(internationalShippingUsdCents('usa', 1))
     expect(res.totalUsdCents).toBe(12000 + res.shippingUsdCents)
@@ -51,24 +51,26 @@ describe('POST /api/checkout/quote', () => {
 
   it('unsupported country → ok:false with the contact-us message', async () => {
     const handler = await loadHandler()
-    const res = await handler(ev({ country: 'Australia', region: '', items }))
+    const res = await handler(ev({ deliveryMethod: 'international_shipping', country: 'Australia', region: '', items }))
     expect(res.ok).toBe(false)
     expect(res.code).toBe('unsupported_destination')
   })
 
-  it('no country → ok:false', async () => {
+  it('international with no country → ok:false', async () => {
     const handler = await loadHandler()
-    expect((await handler(ev({ country: '', items }))).code).toBe('no_country')
+    expect((await handler(ev({ deliveryMethod: 'international_shipping', country: '', items }))).code).toBe('no_country')
   })
 
   it('empty cart → ok:false', async () => {
     const handler = await loadHandler()
-    expect((await handler(ev({ country: 'United States', items: [] }))).code).toBe('empty')
+    expect((await handler(ev({ deliveryMethod: 'local_delivery', items: [] }))).code).toBe('empty')
   })
 
   it('item not in the live catalogue → ok:false', async () => {
     const handler = await loadHandler()
-    const res = await handler(ev({ country: 'United States', items: [{ productId: 'ghost', quantity: 1 }] }))
+    const res = await handler(
+      ev({ deliveryMethod: 'international_shipping', country: 'United States', items: [{ productId: 'ghost', quantity: 1 }] })
+    )
     expect(res.ok).toBe(false)
     expect(res.code).toBe('item')
   })

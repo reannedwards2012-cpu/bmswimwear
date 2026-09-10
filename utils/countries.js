@@ -24,6 +24,11 @@ const REST = [
 
 export const COUNTRIES = ['Grenada', ...REST]
 
+// The checkout's International Shipping country <select> — Grenada is NOT an
+// international destination (it's the Local Delivery path), so it's excluded
+// here rather than shown and then rejected.
+export const INTERNATIONAL_COUNTRIES = [...REST]
+
 // Grenada is a local-delivery-only destination (see server/utils/shipping.js).
 export const GRENADA = 'Grenada'
 

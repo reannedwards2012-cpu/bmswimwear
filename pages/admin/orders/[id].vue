@@ -207,11 +207,11 @@
             <div v-if="order.delivery.shippingAddress1" class="mt-2 space-y-0.5 text-xs leading-relaxed text-ink/60">
               <p>{{ order.delivery.shippingAddress1 }}</p>
               <p v-if="order.delivery.shippingAddress2">{{ order.delivery.shippingAddress2 }}</p>
-              <p>
-                {{ order.delivery.shippingCity }}<template v-if="order.delivery.shippingRegion">, {{ order.delivery.shippingRegion }}</template>
+              <p v-if="order.delivery.shippingCity || order.delivery.shippingRegion">
+                {{ [order.delivery.shippingCity, order.delivery.shippingRegion].filter(Boolean).join(', ') }}
               </p>
               <p v-if="order.delivery.shippingPostalCode">{{ order.delivery.shippingPostalCode }}</p>
-              <p>{{ order.delivery.shippingCountry }}</p>
+              <p v-if="order.delivery.shippingCountry">{{ order.delivery.shippingCountry }}</p>
             </div>
             <p v-if="order.billableWeightLb" class="mt-2 text-[0.7rem] text-ink/40">
               Billable weight: {{ order.billableWeightLb }} lb

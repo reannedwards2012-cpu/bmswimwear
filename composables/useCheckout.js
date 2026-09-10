@@ -4,33 +4,51 @@
  * Instantiated once by pages/checkout/index.vue — this creates its own reactive
  * state on each call (it is NOT a shared singleton like useCart).
  *
- * Delivery is NOT a customer choice anymore: the method + charge are derived
- * server-side from the destination (server/utils/shipping.js).
- *   Grenada  → Local Delivery, Saint George parish only, no charge
- *   elsewhere→ International Shipping, priced from zone + weight
- * Every website order now carries a delivery address; the page shows a live
- * Subtotal / Shipping / Total from GET-free POST /api/checkout/quote, and the
- * authoritative checkout endpoint recomputes everything regardless.
+ * The customer picks a delivery METHOD (mutually exclusive):
+ *   local_delivery        → St. George, Grenada only. One free-text
+ *                           "delivery address / area" field, no charge.
+ *   international_shipping → full international address; the charge is computed
+ *                           server-side from destination zone + product weight.
+ *
+ * The browser sends the chosen method, but the authoritative checkout endpoint
+ * recomputes the zone, weight, shipping and total regardless
+ * (server/utils/checkoutOrder.js + shipping.js). The page also shows a live
+ * Subtotal / Shipping / Total from the display-only POST /api/checkout/quote.
  */
 import { computed, reactive, ref } from 'vue'
-import { GRENADA } from '~/utils/countries'
+
+export const DELIVERY_METHODS = [
+  {
+    value: 'local_delivery',
+    label: 'Local Delivery',
+    hint: 'Available within St. George only.'
+  },
+  {
+    value: 'international_shipping',
+    label: 'International Shipping',
+    hint: 'Calculated from your destination and order weight.'
+  }
+]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const CHECKOUT_STORE_KEY = 'bm-checkout'
 
 /**
  * Fingerprint of everything that can change the authoritative payable amount —
- * cart lines/quantities AND the destination (country + parish/region). The
- * checkout id is regenerated whenever this changes, so a Go2Pay Payment Request
- * minted for one total can never be reused to charge a different total.
+ * cart lines/quantities, the chosen delivery method, AND (for international) the
+ * destination. The checkout id regenerates when this changes, so a Go2Pay
+ * Payment Request minted for one total can never be reused to charge another.
  */
-function checkoutFingerprint(items, country, region) {
+function checkoutFingerprint(items, method, country, region) {
   const lines = items
     .map((i) => `${i.lineId}:${i.quantity}`)
     .sort()
     .join('|')
-  const dest = `${(country || '').trim()}::${(region || '').trim().toLowerCase()}`
-  return `${lines}##${dest}`
+  const dest =
+    method === 'local_delivery'
+      ? 'local'
+      : ['intl', (country || '').trim(), (region || '').trim().toLowerCase()].join('::')
+  return `${lines}##${method || ''}##${dest}`
 }
 
 function readStore() {
@@ -46,9 +64,12 @@ export function useCheckout() {
   const { items, subtotalUsd } = useCart()
 
   const customer = reactive({ firstName: '', lastName: '', email: '', phone: '' })
+  // Bahama Mama is Grenada-based; the old checkout had no default, so Local
+  // Delivery is the sensible default here.
+  const deliveryMethod = ref('local_delivery')
   const shippingAddress = reactive({
     country: '',
-    address1: '',
+    address1: '', // international: address line 1 · local: the delivery area
     address2: '',
     city: '',
     region: '',
@@ -61,18 +82,16 @@ export function useCheckout() {
   // Flat map of field key -> message. Only populated on a submit attempt.
   const errors = reactive({})
 
-  const isGrenada = computed(() => shippingAddress.country === GRENADA)
-  const deliveryLabel = computed(() => {
-    if (!shippingAddress.country) return ''
-    return isGrenada.value ? 'Local Delivery' : 'International Shipping'
-  })
+  const isLocal = computed(() => deliveryMethod.value === 'local_delivery')
+  const deliveryLabel = computed(() => (isLocal.value ? 'Local Delivery' : 'International Shipping'))
 
-  /**
-   * Stable id for this checkout attempt, persisted per-tab in sessionStorage
-   * and tied to the current cart contents + destination.
-   */
   function checkoutId() {
-    const fp = checkoutFingerprint(items.value, shippingAddress.country, shippingAddress.region)
+    const fp = checkoutFingerprint(
+      items.value,
+      deliveryMethod.value,
+      shippingAddress.country,
+      shippingAddress.region
+    )
     const stored = readStore()
     if (stored?.id && stored.fp === fp) return stored.id
 
@@ -117,15 +136,12 @@ export function useCheckout() {
     if (!customer.phone.trim()) errors.phone = 'Enter your phone number.'
     else if (digits.length < 7) errors.phone = 'Enter a valid phone number.'
 
-    if (!shippingAddress.country) errors.country = 'Select a country.'
-    if (!shippingAddress.address1.trim()) errors.address1 = 'Enter your address.'
-    if (!shippingAddress.city.trim()) errors.city = 'Enter your city or town.'
-
-    if (isGrenada.value) {
-      if (!shippingAddress.region) errors.region = 'Select your parish.'
-      else if (shippingAddress.region !== 'Saint George') {
-        errors.region = 'Local delivery is currently available within St. George only.'
-      }
+    if (isLocal.value) {
+      if (!shippingAddress.address1.trim()) errors.address1 = 'Enter your delivery address or area.'
+    } else {
+      if (!shippingAddress.country) errors.country = 'Select a country.'
+      if (!shippingAddress.address1.trim()) errors.address1 = 'Enter your address.'
+      if (!shippingAddress.city.trim()) errors.city = 'Enter your city or town.'
     }
 
     return Object.keys(errors).length === 0
@@ -141,6 +157,7 @@ export function useCheckout() {
         email: customer.email.trim(),
         phone: customer.phone.trim()
       },
+      deliveryMethod: deliveryMethod.value,
       shippingAddress: {
         country: shippingAddress.country,
         address1: shippingAddress.address1.trim(),
@@ -157,11 +174,12 @@ export function useCheckout() {
 
   return {
     customer,
+    deliveryMethod,
     shippingAddress,
     notes,
     marketingOptIn,
     errors,
-    isGrenada,
+    isLocal,
     deliveryLabel,
     clearError,
     validate,

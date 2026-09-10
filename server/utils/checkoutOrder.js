@@ -14,15 +14,23 @@
  * product — is rejected exactly as an unknown product was before.
  *
  * ── Delivery ──────────────────────────────────────────────────────────────
- * Every website order now has a delivery address. The delivery method + charge
- * are DERIVED server-side from the destination (server/utils/shipping.js):
- *   Grenada (Saint George)  → Local Delivery, US$0
- *   supported country       → International Shipping, computed from zone+weight
- *   Grenada other parish / unsupported country → rejected (no order created)
+ * The customer picks a delivery METHOD ('local_delivery' | 'international_shipping').
+ * The browser is trusted for that choice only — never for the price, zone,
+ * country classification, weight or total.
+ *
+ *   local_delivery        → forced to Grenada + Saint George, zone 'local', US$0.
+ *                           The customer supplies only a free-text delivery
+ *                           area (stored in shipping_address1).
+ *   international_shipping → requires a valid NON-Grenada country + address;
+ *                           runs the authoritative zone + weight + Grenada Post
+ *                           rate calculation (server/utils/shipping.js).
+ *
  * `delivery_method` is stored as 'shipping' for every website order;
  * `shipping_zone` ('local' | a zone key) is the authoritative discriminator.
  */
 import { resolveDelivery } from './shipping.js'
+
+const LOCAL_METHOD = 'local_delivery'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -84,30 +92,50 @@ export function buildValidatedOrder(payload, catalogue) {
     issues.push('One or more contact fields are too long.')
   }
 
-  // ── delivery address (always required — the method + charge are derived
-  //    from the destination, not chosen by the customer) ──
-  const a = p.shippingAddress && typeof p.shippingAddress === 'object' ? p.shippingAddress : {}
-  const country = str(a.country)
-  const address1 = str(a.address1)
-  const address2 = str(a.address2)
-  const city = str(a.city)
-  const region = str(a.region)
-  const postalCode = str(a.postalCode)
+  // ── delivery method (browser choice — never trusted for money/zone/weight) ──
+  // Anything other than the explicit local value is treated as international.
+  const isLocal = str(p.deliveryMethod) === LOCAL_METHOD
 
-  if (!country) issues.push('Select a country.')
-  if (!address1) issues.push('Enter an address.')
-  if (!city) issues.push('Enter a city or town.')
-  // Grenada = local delivery, and we need the parish to confirm Saint George.
-  if (country === 'Grenada' && !region) issues.push('Select your delivery parish.')
-  if (
-    country.length > MAX.country ||
-    address1.length > MAX.address ||
-    address2.length > MAX.address ||
-    city.length > MAX.city ||
-    region.length > MAX.region ||
-    postalCode.length > MAX.postal
-  ) {
-    issues.push('One or more address fields are too long.')
+  const a = p.shippingAddress && typeof p.shippingAddress === 'object' ? p.shippingAddress : {}
+
+  // Authoritative address fields. For local delivery the country + region are
+  // FORCED server-side (Grenada / Saint George) and the customer's only input
+  // is a free-text delivery area → shipping_address1.
+  let country, address1, address2, city, region, postalCode
+
+  if (isLocal) {
+    country = 'Grenada'
+    region = 'Saint George'
+    address1 = str(a.address1) // the "Delivery address / area" field
+    address2 = ''
+    city = ''
+    postalCode = ''
+    if (!address1) issues.push('Enter your delivery address or area.')
+    if (address1.length > MAX.address) issues.push('Your delivery address is too long.')
+  } else {
+    country = str(a.country)
+    address1 = str(a.address1)
+    address2 = str(a.address2)
+    city = str(a.city)
+    region = str(a.region)
+    postalCode = str(a.postalCode)
+
+    if (!country) issues.push('Select a country.')
+    else if (country === 'Grenada') {
+      issues.push('Grenada orders use Local Delivery — please choose Local Delivery.')
+    }
+    if (!address1) issues.push('Enter an address.')
+    if (!city) issues.push('Enter a city or town.')
+    if (
+      country.length > MAX.country ||
+      address1.length > MAX.address ||
+      address2.length > MAX.address ||
+      city.length > MAX.city ||
+      region.length > MAX.region ||
+      postalCode.length > MAX.postal
+    ) {
+      issues.push('One or more address fields are too long.')
+    }
   }
 
   const shipping = {
