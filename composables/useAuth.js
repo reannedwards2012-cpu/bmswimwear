@@ -15,9 +15,19 @@
  */
 import { computed } from 'vue'
 import { createClient } from '@supabase/supabase-js'
+import { writeLastActive } from '~/utils/idleSession'
 
 const USER_KEY = 'bm-user'
 const READY_KEY = 'bm-auth-ready'
+
+// A successful interactive authentication is the strongest possible "activity":
+// it starts a clean 24h idle window and overwrites any stale/expired
+// last-active timestamp left behind by an earlier failed idle sign-out. Used by
+// plugins/idle-logout.client.js. No-op on the server / when storage is
+// unavailable (writeLastActive is wrapped).
+function markAuthenticatedNow() {
+  if (import.meta.client) writeLastActive(window.localStorage, Date.now())
+}
 
 // Module-singleton browser client — created once, client-side only.
 let _client = null
@@ -108,6 +118,7 @@ export function useAuth() {
     if (!client) return { error: 'Authentication is unavailable right now.' }
 
     const { error } = await client.auth.signInWithPassword({ email: trimEmail(email), password })
+    if (!error) markAuthenticatedNow()
     return { error: error?.message ?? null }
   }
 
@@ -135,6 +146,7 @@ export function useAuth() {
     if (!client) return { error: 'Authentication is unavailable right now.' }
 
     const { error } = await client.auth.updateUser({ password })
+    if (!error) markAuthenticatedNow()
     return { error: error?.message ?? null }
   }
 
