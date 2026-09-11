@@ -8,11 +8,11 @@
         <div class="relative mx-auto" :style="{ maxWidth: '68rem' }">
           <!-- stacked-paper edges peeking from behind the top spread -->
           <div
-            class="pointer-events-none absolute inset-x-3 -bottom-2 top-3 hidden rounded-[1.5rem] bg-sand/70 shadow-soft sm:block"
+            class="pointer-events-none absolute inset-x-3 -bottom-2 top-3 hidden bg-sand/70 shadow-soft sm:block"
             aria-hidden="true"
           />
           <div
-            class="pointer-events-none absolute inset-x-1.5 -bottom-1 top-1.5 hidden rounded-[1.6rem] bg-sand/85 shadow-soft sm:block"
+            class="pointer-events-none absolute inset-x-1.5 -bottom-1 top-1.5 hidden bg-sand/85 shadow-soft sm:block"
             aria-hidden="true"
           />
 
@@ -26,7 +26,7 @@
                  lands back at the same on-screen size. -->
             <div
               ref="bookHost"
-              class="relative mx-auto overflow-hidden rounded-[1.75rem] bg-sand shadow-[0_50px_120px_-40px_rgba(27,42,47,0.5)]"
+              class="relative mx-auto overflow-hidden bg-sand shadow-[0_50px_120px_-40px_rgba(27,42,47,0.5)]"
               :style="{ aspectRatio: hostAspect, width: '100%' }"
             >
               <div
@@ -40,7 +40,7 @@
 
             <template #fallback>
               <div
-                class="relative mx-auto aspect-[4/5] w-full max-w-[26rem] overflow-hidden rounded-[1.75rem] bg-sand shadow-[0_50px_120px_-40px_rgba(27,42,47,0.5)] sm:aspect-[8/5] sm:max-w-none"
+                class="relative mx-auto aspect-[4/5] w-full max-w-[26rem] overflow-hidden bg-sand shadow-[0_50px_120px_-40px_rgba(27,42,47,0.5)] sm:aspect-[8/5] sm:max-w-none"
               >
                 <img :src="pages[0].src" alt="" class="h-full w-full object-cover" />
               </div>

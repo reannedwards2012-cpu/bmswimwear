@@ -32,7 +32,7 @@
       <div class="relative">
         <div class="aspect-[3/4] w-4/5 rounded-4xl bg-shell shadow-card">
           <img
-            src="/images/site/about-1.jpg"
+            src="/images/site/about-1.jpeg"
             alt="Cutting a swimsuit on a dress form in the studio"
             class="h-full w-full rounded-4xl object-cover"
           />

@@ -43,6 +43,7 @@ export default defineNuxtConfig({
         { property: 'og:type', content: 'website' }
       ],
       link: [
+        { rel: 'icon', type: 'image/png', href: '/images/site/BMFavicon.png' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         {
           rel: 'preconnect',
