@@ -31,6 +31,7 @@ const LINKS = [
   { label: 'Orders', to: '/admin/orders', icon: 'M6 8h12l1 12H5L6 8Zm3 0V6a3 3 0 0 1 6 0v2' },
   { label: 'Fabric Inventory', to: '/admin/fabrics', icon: 'M5 5h9v9H5V5Zm5 5h9v9h-9v-9Z' },
   { label: 'Products', to: '/admin/products', icon: 'M4 4h8l8 8-8 8-8-8V4Zm4.5 4.5h.01' },
+  { label: 'Stockists', to: '/admin/stockists', icon: 'M4 21V9l8-5 8 5v12M9 21v-6h6v6M4 9h16' },
   { label: 'Inquiries', to: '/admin/inquiries', icon: 'M3 5h18v14H3V5Zm0 0 9 7 9-7' }
 ]
 
