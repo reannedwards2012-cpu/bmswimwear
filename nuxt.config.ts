@@ -43,7 +43,14 @@ export default defineNuxtConfig({
         { property: 'og:type', content: 'website' }
       ],
       link: [
-        { rel: 'icon', type: 'image/png', href: '/images/site/BMFavicon.png' },
+        // A real /favicon.ico is required at this exact conventional path —
+        // without one, Nitro's serve-placeholder middleware answers
+        // GET /favicon.ico with a fake 200 (a 1x1 transparent-GIF data URI
+        // mislabeled as image/x-icon) instead of a 404, and many browsers
+        // request/prefer that path independently of the <link> tags below.
+        { rel: 'icon', href: '/favicon.ico', sizes: 'any' },
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/images/site/bmfavi-32.png' },
+        { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/images/site/bmfavi-16.png' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         {
           rel: 'preconnect',
