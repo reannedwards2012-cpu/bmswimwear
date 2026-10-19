@@ -450,7 +450,7 @@ export function bikiniMixBookingConfirmationEmail(view = {}) {
       `Your bikini base will be prepared using the selections above, so there's nothing more to choose online — you'll pick your straps, beads, charms and other extras at the event.`
     ),
     para(`If anything looks off, just reply to this email.`),
-    para(`With love from Grenada,<br><span style="color:${C.accent};">${SITE_NAME}</span>`)
+    para(`With love,<br><span style="color:${C.accent};">${SITE_NAME}</span>`)
   ].join('')
 
   const text = [
@@ -464,7 +464,7 @@ export function bikiniMixBookingConfirmationEmail(view = {}) {
     '',
     'If anything looks off, just reply to this email.',
     '',
-    'With love from Grenada,',
+    'With love,',
     SITE_NAME
   ].join('\n')
 
@@ -493,7 +493,7 @@ export function bikiniMixBookingNeedsReviewEmail(view = {}) {
     ),
     `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 16px;">${rowsHtml}</table>`,
     para(`Questions in the meantime? Just reply to this email.`),
-    para(`With love from Grenada,<br><span style="color:${C.accent};">${SITE_NAME}</span>`)
+    para(`With love,<br><span style="color:${C.accent};">${SITE_NAME}</span>`)
   ].join('')
 
   const text = [
@@ -505,7 +505,7 @@ export function bikiniMixBookingNeedsReviewEmail(view = {}) {
     '',
     'Questions in the meantime? Just reply to this email.',
     '',
-    'With love from Grenada,',
+    'With love,',
     SITE_NAME
   ].join('\n')
 
