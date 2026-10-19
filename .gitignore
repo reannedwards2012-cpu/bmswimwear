@@ -20,3 +20,8 @@ webphotos-originals/
 # local editors
 .vscode
 .idea
+
+# Supabase CLI local project link/session cache (never commit — project ref
+# cache and pooler connection info, written by `supabase link`)
+supabase/.temp
+supabase/.branches

@@ -407,3 +407,153 @@ export function orderAdminEmail(order = {}, adminUrl) {
     text
   }
 }
+
+// ── Bikini Mixer: booking view shape ────────────────────────────────────────
+// { bookingRef, fullName, email, package: 'classic_mix'|'the_works',
+//   retailPriceXcdCents, chargedUsdCents, topSize, bottomSize,
+//   leftFabricName, rightFabricName, bottomFabricName, bottomStyle,
+//   bottomCoverage, personalizationName, eventName, eventDate, venue,
+//   status: 'confirmed'|'paid_needs_review' }
+function bikiniMixRows(view) {
+  const packageLabel = view.package === 'the_works' ? 'The Works' : 'Classic Mix'
+  const styleLabel = view.bottomStyle === 'tie-side' ? 'Tie-Side' : 'Classic'
+  const coverageLabel = view.bottomCoverage === 'cheeky' ? 'Cheeky' : 'Bikini'
+  const rows = [
+    ['Booking reference', view.bookingRef],
+    ['Package', packageLabel],
+    ['Top', `Size ${view.topSize} — ${view.leftFabricName} / ${view.rightFabricName}`],
+    ['Bottom', `${styleLabel}, ${coverageLabel} coverage, size ${view.bottomSize} — ${view.bottomFabricName}`]
+  ]
+  if (view.personalizationName) rows.push(['Personalization', view.personalizationName])
+  rows.push(['Amount paid', `${usd(view.chargedUsdCents)} USD`])
+  if (view.eventDate) rows.push(['Event date', view.eventDate])
+  if (view.venue) rows.push(['Venue', view.venue])
+  return rows
+}
+
+// ── Bikini Mixer: customer confirmation (payment verified, spot confirmed) ──
+export function bikiniMixBookingConfirmationEmail(view = {}) {
+  const hi = view.fullName ? `Hi ${esc(view.fullName)},` : 'Hi there,'
+  const rows = bikiniMixRows(view)
+  const rowsHtml = rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:4px 12px 4px 0;font-size:13px;color:${C.muted};white-space:nowrap;vertical-align:top;">${esc(k)}</td><td style="padding:4px 0;font-size:14px;color:${C.ink};">${esc(v)}</td></tr>`
+    )
+    .join('')
+
+  const bodyHtml = [
+    para(hi),
+    para(`You're on the list! 🍹 Your spot at <strong>${esc(view.eventName || 'The Bikini Mixer')}</strong> is confirmed — we can't wait to see what you create.`),
+    `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 16px;">${rowsHtml}</table>`,
+    para(
+      `Your bikini base will be prepared using the selections above, so there's nothing more to choose online — you'll pick your straps, beads, charms and other extras at the event.`
+    ),
+    para(`If anything looks off, just reply to this email.`),
+    para(`With love from Grenada,<br><span style="color:${C.accent};">${SITE_NAME}</span>`)
+  ].join('')
+
+  const text = [
+    hi,
+    '',
+    `You're on the list! Your spot at ${view.eventName || 'The Bikini Mixer'} is confirmed — we can't wait to see what you create.`,
+    '',
+    ...rows.map(([k, v]) => `${k}: ${v}`),
+    '',
+    `Your bikini base will be prepared using the selections above — you'll pick your straps, beads, charms and other extras at the event.`,
+    '',
+    'If anything looks off, just reply to this email.',
+    '',
+    'With love from Grenada,',
+    SITE_NAME
+  ].join('\n')
+
+  return {
+    subject: `You're on the list! Your Bikini Mixer booking ${view.bookingRef || ''} is confirmed 🍹`,
+    html: shell({ heading: "You're on the list! 🍹", bodyHtml, preheader: `Booking ${view.bookingRef} confirmed.`, brand: brandHeader() }),
+    text
+  }
+}
+
+// ── Bikini Mixer: customer notice (payment verified, capacity needs review) ─
+export function bikiniMixBookingNeedsReviewEmail(view = {}) {
+  const hi = view.fullName ? `Hi ${esc(view.fullName)},` : 'Hi there,'
+  const rows = bikiniMixRows(view)
+  const rowsHtml = rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:4px 12px 4px 0;font-size:13px;color:${C.muted};white-space:nowrap;vertical-align:top;">${esc(k)}</td><td style="padding:4px 0;font-size:14px;color:${C.ink};">${esc(v)}</td></tr>`
+    )
+    .join('')
+
+  const bodyHtml = [
+    para(hi),
+    para(
+      `We've received and verified your payment for <strong>${esc(view.eventName || 'The Bikini Mixer')}</strong> — thank you! The event reached capacity right around when your payment came through, so we're just confirming your spot by hand. We'll be in touch very shortly, and your payment is safe either way (confirmed, or refunded per our cancellation policy).`
+    ),
+    `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 16px;">${rowsHtml}</table>`,
+    para(`Questions in the meantime? Just reply to this email.`),
+    para(`With love from Grenada,<br><span style="color:${C.accent};">${SITE_NAME}</span>`)
+  ].join('')
+
+  const text = [
+    hi,
+    '',
+    `We've received and verified your payment for ${view.eventName || 'The Bikini Mixer'} — thank you! The event reached capacity right around when your payment came through, so we're just confirming your spot by hand. We'll be in touch very shortly, and your payment is safe either way.`,
+    '',
+    ...rows.map(([k, v]) => `${k}: ${v}`),
+    '',
+    'Questions in the meantime? Just reply to this email.',
+    '',
+    'With love from Grenada,',
+    SITE_NAME
+  ].join('\n')
+
+  return {
+    subject: `Your Bikini Mixer payment is received — confirming your spot`,
+    html: shell({ heading: 'Payment received', bodyHtml, preheader: `Booking ${view.bookingRef} — confirming availability.`, brand: brandHeader() }),
+    text
+  }
+}
+
+// ── Bikini Mixer: admin notification ────────────────────────────────────────
+export function bikiniMixBookingAdminEmail(view = {}, adminUrl) {
+  const rows = [
+    ['Status', view.status === 'confirmed' ? 'Confirmed' : 'NEEDS MANUAL REVIEW'],
+    ['Guest', view.fullName || '—'],
+    ['Email', view.email || '—'],
+    ...bikiniMixRows(view)
+  ]
+  const rowsHtml = rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:4px 12px 4px 0;font-size:13px;color:${C.muted};white-space:nowrap;vertical-align:top;">${esc(k)}</td><td style="padding:4px 0;font-size:14px;color:${C.ink};">${esc(v)}</td></tr>`
+    )
+    .join('')
+
+  const bodyHtml = [
+    para(
+      view.status === 'confirmed'
+        ? 'A Bikini Mixer booking has been paid and confirmed.'
+        : '⚠ A Bikini Mixer booking was paid but needs manual review — the event was at capacity when the payment verified.'
+    ),
+    `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 14px;">${rowsHtml}</table>`,
+    adminUrl ? para(`<a href="${esc(adminUrl)}" style="color:${C.accent};">View booking in admin →</a>`) : ''
+  ].join('')
+
+  const text = [
+    view.status === 'confirmed' ? 'Bikini Mixer booking paid and confirmed' : 'NEEDS REVIEW: Bikini Mixer booking paid at capacity',
+    '',
+    ...rows.map(([k, v]) => `${k}: ${v}`),
+    ...(adminUrl ? ['', `Admin: ${adminUrl}`] : [])
+  ].join('\n')
+
+  return {
+    subject:
+      view.status === 'confirmed'
+        ? `Bikini Mixer booking confirmed — ${view.bookingRef || ''}`
+        : `⚠ Needs review: Bikini Mixer booking ${view.bookingRef || ''}`,
+    html: shell({ heading: 'Bikini Mixer booking', bodyHtml }),
+    text
+  }
+}

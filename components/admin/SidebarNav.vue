@@ -32,6 +32,7 @@ const LINKS = [
   { label: 'Fabric Inventory', to: '/admin/fabrics', icon: 'M5 5h9v9H5V5Zm5 5h9v9h-9v-9Z' },
   { label: 'Products', to: '/admin/products', icon: 'M4 4h8l8 8-8 8-8-8V4Zm4.5 4.5h.01' },
   { label: 'Stockists', to: '/admin/stockists', icon: 'M4 21V9l8-5 8 5v12M9 21v-6h6v6M4 9h16' },
+  { label: 'Bikini Mix', to: '/admin/bikini-mix', icon: 'M8 4c2 0 2 3 4 3s2-3 4-3M4 20c3-6 6-9 8-9s5 3 8 9M9 11l-2 9M15 11l2 9' },
   { label: 'Inquiries', to: '/admin/inquiries', icon: 'M3 5h18v14H3V5Zm0 0 9 7 9-7' }
 ]
 
