@@ -3,9 +3,6 @@
     <BikiniMixDecor />
 
     <div class="relative z-10">
-      <p v-if="isMock" class="bg-ink py-2 text-center text-[0.7rem] font-semibold uppercase tracking-widest2 text-cream/80">
-        Dev preview — showing placeholder event details until the database is connected
-      </p>
       <p v-if="testMode" class="bg-coral py-2 text-center text-[0.7rem] font-semibold uppercase tracking-widest2 text-cream">
         🧪 Admin test mode — no real guest sees this, and any payment here is a small fixed test charge, never a real booking
       </p>
@@ -14,6 +11,14 @@
         <BikiniMixCustomerProgressBar :current="currentStep" class="mb-10" />
 
       <p v-if="pending" class="text-center text-sm text-ink/50">Loading…</p>
+
+      <div v-else-if="loadError || !event" class="mx-auto max-w-md rounded-3xl bg-cream p-8 text-center shadow-card">
+        <p class="font-display text-lg font-semibold text-ink">We couldn't load this page</p>
+        <p class="mt-2 text-sm text-ink/60">
+          Something went wrong fetching the latest Bikini Mixer details. Please check your connection and try again.
+        </p>
+        <button type="button" class="btn-primary mt-5" @click="retryLoad">Try again</button>
+      </div>
 
       <template v-else>
         <template v-if="currentStep === 1">
@@ -43,12 +48,7 @@
         </template>
 
         <template v-else-if="currentStep === 2">
-          <BikiniMixCustomerStepBuild
-            v-model="build"
-            :fabrics="fabrics"
-            :fabrics-is-mock="fabricsIsMock"
-            :bottom-size-guide="event.bottomSizeGuide"
-          />
+          <BikiniMixCustomerStepBuild v-model="build" :fabrics="fabrics" :bottom-size-guide="event.bottomSizeGuide" />
           <div class="mx-auto mt-10 flex max-w-3xl items-center justify-between">
             <button type="button" class="btn-outline" @click="goTo(1)">← Back</button>
             <button type="button" class="btn-primary" @click="goTo(3)">Continue</button>
@@ -123,10 +123,22 @@ import { isValidEmail, isValidPhone } from '~/utils/validate'
 
 useHead({ title: 'The Bikini Mixer — Bahama Mama Swimwear' })
 
-const { event, isMock, pending } = await useBikiniMixEvent()
-const { fabrics, isMock: fabricsIsMock } = await useBikiniMixFabrics()
+const { event, pending: eventPending, error: eventError, refresh: refreshEvent } = await useBikiniMixEvent()
+const { fabrics, pending: fabricsPending, error: fabricsError, refresh: refreshFabrics } = await useBikiniMixFabrics()
 const { currentStep, build, details, selectedPackage, personalizationName, policyAccepted, marketingOptIn } =
   useBikiniMixBooking()
+
+// No mock fallback for either fetch — a failure on either one blocks the
+// whole flow behind the error state in the template (real event + real
+// fabric data are both required for the booking flow to mean anything),
+// rather than silently substituting placeholder data.
+const pending = computed(() => eventPending.value || fabricsPending.value)
+const loadError = computed(() => Boolean(eventError.value) || Boolean(fabricsError.value))
+
+function retryLoad() {
+  refreshEvent()
+  refreshFabrics()
+}
 
 function goTo(step) {
   currentStep.value = step
@@ -142,12 +154,6 @@ const isAdminTester = ref(false)
 const testMode = ref(false)
 
 onMounted(async () => {
-  // Deliberately NOT gated on event.value.isBookingsOpen here — that value
-  // briefly reads from the mock-fallback event (isBookingsOpen: true) before
-  // the real fetch resolves, which would skip this check entirely. The
-  // template's own v-if already hides the test-mode entry point whenever
-  // bookings are really open, so running this unconditionally is safe and
-  // avoids that race.
   try {
     const { getAccessToken } = useAuth()
     const token = await getAccessToken()

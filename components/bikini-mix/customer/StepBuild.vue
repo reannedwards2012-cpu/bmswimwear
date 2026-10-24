@@ -5,10 +5,6 @@
       your bikini pieces ahead of time so everything is ready for you to make it your own.
     </FancyHeading>
 
-    <p v-if="fabricsIsMock" class="mx-auto mt-4 max-w-md rounded-2xl bg-ink/5 px-4 py-2 text-center text-[0.7rem] text-ink/50">
-      Dev preview — showing placeholder fabric swatches until the fabric palette is connected.
-    </p>
-
     <div class="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
       <!-- preview — the focal point -->
       <div class="flex flex-col items-center gap-4 lg:sticky lg:top-8 lg:w-[22rem] lg:shrink-0">
@@ -241,7 +237,6 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 const props = defineProps({
   modelValue: { type: Object, required: true },
   fabrics: { type: Array, default: () => [] },
-  fabricsIsMock: { type: Boolean, default: false },
   bottomSizeGuide: { type: Array, default: () => [] }
 })
 const emit = defineEmits(['update:modelValue'])
