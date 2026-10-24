@@ -18,8 +18,11 @@
             <BikiniMixPreview
               :left-colour="leftHex"
               :right-colour="rightHex"
+              :left-image-url="leftFabric?.imageUrl || null"
+              :right-image-url="rightFabric?.imageUrl || null"
               :bottom-style="build.bottomStyle"
               :bottom-colour="bottomHex"
+              :bottom-image-url="bottomFabric?.imageUrl || null"
               :preview-width="190"
               :show-hint="false"
               compact

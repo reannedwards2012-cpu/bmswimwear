@@ -15,8 +15,11 @@
         <BikiniMixPreview
           :left-colour="leftHex"
           :right-colour="rightHex"
+          :left-image-url="leftFabric?.imageUrl || null"
+          :right-image-url="rightFabric?.imageUrl || null"
           :bottom-style="modelValue.bottomStyle"
           :bottom-colour="bottomHex"
+          :bottom-image-url="bottomFabric?.imageUrl || null"
           :active-component="activeComponent"
           :preview-width="300"
           @select-component="activeComponent = $event"
@@ -91,16 +94,35 @@
                 class="flex min-h-11 items-center gap-2 rounded-full border px-3.5 py-2.5 text-xs font-medium transition-colors"
                 :class="activeFabricId === f.id ? 'border-ink bg-ink text-cream' : 'border-ink/15 text-ink/70 hover:border-ink/40'"
                 :aria-pressed="activeFabricId === f.id"
-                @click="activeFabricId = f.id"
+                @click="selectFabric(f)"
+                @mouseenter="showPreview(f.id)"
+                @mouseleave="hidePreview(f.id)"
               >
                 <span
                   class="h-5 w-5 shrink-0 rounded-full border bg-cover bg-center"
-                  :class="activeFabricId === f.id ? 'border-cream/40 ring-2 ring-cream/60' : 'border-ink/10'"
+                  :class="activeFabricId === f.id ? 'border-ink/20 ring-2 ring-coral/70' : 'border-ink/10'"
                   :style="f.imageUrl ? { backgroundImage: `url(${f.imageUrl})` } : { backgroundColor: f.hexColor }"
                 />
                 {{ f.name }}
               </button>
             </div>
+
+            <!-- Hover (desktop) / tap (mobile) fabric preview — additive only,
+                 never interferes with the click-to-select above. -->
+            <transition name="fade-preview">
+              <div v-if="previewFabric" class="mt-3 flex items-center gap-3 rounded-2xl border border-ink/10 bg-cream p-3 shadow-card">
+                <span
+                  class="h-16 w-16 shrink-0 rounded-xl border border-ink/10 bg-cover bg-center"
+                  :style="previewFabric.imageUrl ? { backgroundImage: `url(${previewFabric.imageUrl})` } : { backgroundColor: previewFabric.hexColor }"
+                />
+                <div>
+                  <p class="text-sm font-semibold text-ink">{{ previewFabric.name }}</p>
+                  <p class="text-[0.65rem] uppercase tracking-widest2 text-ink/40">
+                    {{ previewFabric.imageUrl ? 'Printed fabric' : 'Solid colour' }}
+                  </p>
+                </div>
+              </div>
+            </transition>
           </div>
 
           <button type="button" class="mt-4 text-xs font-semibold text-ink/45 underline decoration-dotted underline-offset-2 hover:text-coral" @click="matchAll">
@@ -214,7 +236,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Object, required: true },
@@ -284,6 +306,41 @@ function matchAll() {
   update({ leftFabricId: id, rightFabricId: id, bottomFabricId: id })
 }
 
+// ── Fabric preview: desktop hover shows it instantly; mobile tap selects
+// the fabric exactly as before AND shows the same preview, auto-hiding
+// shortly after since there's no hover to dismiss it on touch. Purely
+// additive — never calls preventDefault, so it can't break the existing
+// click-to-select behaviour above.
+//
+// Some mobile browsers fire a synthetic, compatibility `mouseenter` on
+// whatever element ends up under the pointer shortly after a tap (iOS
+// Safari's hover-emulation quirk) — without the guard below, that stray
+// event can silently swap the preview to a neighbouring swatch right after
+// a tap already set it correctly. selectAt briefly locks showPreview out so
+// a tap's own preview always wins. ──
+const previewFabricId = ref(null)
+let previewTimer = null
+let selectedAt = 0
+const previewFabric = computed(() => fabricById(previewFabricId.value))
+
+function showPreview(id) {
+  if (Date.now() - selectedAt < 500) return
+  previewFabricId.value = id
+}
+function hidePreview(id) {
+  if (previewFabricId.value === id) previewFabricId.value = null
+}
+function selectFabric(f) {
+  activeFabricId.value = f.id
+  previewFabricId.value = f.id
+  selectedAt = Date.now()
+  clearTimeout(previewTimer)
+  previewTimer = setTimeout(() => {
+    if (previewFabricId.value === f.id) previewFabricId.value = null
+  }, 2200)
+}
+onBeforeUnmount(() => clearTimeout(previewTimer))
+
 const bottomStyleLabel = computed(() => (props.modelValue.bottomStyle === 'tie-side' ? 'Tie-Side' : 'Classic'))
 const bottomCoverageLabel = computed(() => (props.modelValue.bottomCoverage === 'cheeky' ? 'Cheeky' : 'Bikini'))
 
@@ -292,3 +349,14 @@ function coverageArtKey(coverage) {
   return `${prefix}_${coverage}`
 }
 </script>
+
+<style scoped>
+.fade-preview-enter-active,
+.fade-preview-leave-active {
+  transition: opacity 150ms ease;
+}
+.fade-preview-enter-from,
+.fade-preview-leave-to {
+  opacity: 0;
+}
+</style>

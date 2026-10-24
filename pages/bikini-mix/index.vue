@@ -1,14 +1,17 @@
 <template>
-  <div class="min-h-screen bg-sand">
-    <p v-if="isMock" class="bg-ink py-2 text-center text-[0.7rem] font-semibold uppercase tracking-widest2 text-cream/80">
-      Dev preview — showing placeholder event details until the database is connected
-    </p>
-    <p v-if="testMode" class="bg-coral py-2 text-center text-[0.7rem] font-semibold uppercase tracking-widest2 text-cream">
-      🧪 Admin test mode — no real guest sees this, and any payment here is a small fixed test charge, never a real booking
-    </p>
+  <div class="relative min-h-screen bg-sand">
+    <BikiniMixDecor />
 
-    <div class="section container-bm !pb-28">
-      <BikiniMixCustomerProgressBar :current="currentStep" class="mb-10" />
+    <div class="relative z-10">
+      <p v-if="isMock" class="bg-ink py-2 text-center text-[0.7rem] font-semibold uppercase tracking-widest2 text-cream/80">
+        Dev preview — showing placeholder event details until the database is connected
+      </p>
+      <p v-if="testMode" class="bg-coral py-2 text-center text-[0.7rem] font-semibold uppercase tracking-widest2 text-cream">
+        🧪 Admin test mode — no real guest sees this, and any payment here is a small fixed test charge, never a real booking
+      </p>
+
+      <div class="section container-bm !pb-28">
+        <BikiniMixCustomerProgressBar :current="currentStep" class="mb-10" />
 
       <p v-if="pending" class="text-center text-sm text-ink/50">Loading…</p>
 
@@ -109,6 +112,7 @@
           </div>
         </template>
       </template>
+      </div>
     </div>
   </div>
 </template>

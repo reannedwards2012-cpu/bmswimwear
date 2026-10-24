@@ -16,7 +16,26 @@
       @click="$emit('select', side)"
     >
       <svg :width="perWidth" :height="perHeight" :viewBox="`0 0 ${art[side].w} ${art[side].h}`">
-        <g :transform="art[side].transform" :fill="side === 'left' ? leftColour : rightColour" stroke="none">
+        <defs>
+          <clipPath :id="`${clipIdBase}-${side}`">
+            <path :d="art[side].d" :transform="art[side].transform" />
+          </clipPath>
+        </defs>
+        <g v-if="!(side === 'left' ? leftImageUrl : rightImageUrl)" :transform="art[side].transform" :fill="side === 'left' ? leftColour : rightColour" stroke="none">
+          <path :d="art[side].d" />
+        </g>
+        <image
+          v-else
+          :href="side === 'left' ? leftImageUrl : rightImageUrl"
+          x="0"
+          y="0"
+          :width="art[side].w"
+          :height="art[side].h"
+          preserveAspectRatio="xMidYMid slice"
+          :clip-path="`url(#${clipIdBase}-${side})`"
+        />
+        <!-- subtle outline so light/white fabrics stay visible against the preview background -->
+        <g :transform="art[side].transform" fill="none" stroke="rgba(28,28,28,0.14)" stroke-width="12">
           <path :d="art[side].d" />
         </g>
       </svg>
@@ -31,12 +50,15 @@ import { BIKINI_ART } from '~/data/bikiniMixArt.js'
 const props = defineProps({
   leftColour: { type: String, required: true },
   rightColour: { type: String, required: true },
+  leftImageUrl: { type: String, default: null },
+  rightImageUrl: { type: String, default: null },
   active: { type: String, default: null }, // 'left' | 'right' | null
   groupWidth: { type: Number, default: 220 } // combined width of both triangles + gap
 })
 defineEmits(['select'])
 
 const art = { left: BIKINI_ART.top_left, right: BIKINI_ART.top_right }
+const clipIdBase = `bm-top-clip-${Math.random().toString(36).slice(2)}`
 
 const gapPx = computed(() => Math.round(props.groupWidth * 0.045))
 const perWidth = computed(() => Math.round((props.groupWidth - gapPx.value) / 2))

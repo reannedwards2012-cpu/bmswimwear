@@ -7,6 +7,8 @@
       <TopTriangle
         :left-colour="leftColour"
         :right-colour="rightColour"
+        :left-image-url="leftImageUrl"
+        :right-image-url="rightImageUrl"
         :active="activeComponent === 'left' || activeComponent === 'right' ? activeComponent : null"
         :group-width="topGroupWidth"
         @select="(side) => $emit('select-component', side)"
@@ -15,6 +17,7 @@
       <component
         :is="bottomStyle === 'tie-side' ? BottomTieSide : BottomClassic"
         :colour="bottomColour"
+        :image-url="bottomImageUrl"
         :active="activeComponent === 'bottom'"
         :width="bottomWidth"
         @select="$emit('select-component', 'bottom')"
@@ -36,8 +39,11 @@ import BottomClassic from './BottomClassic.vue'
 const props = defineProps({
   leftColour: { type: String, required: true },
   rightColour: { type: String, required: true },
+  leftImageUrl: { type: String, default: null },
+  rightImageUrl: { type: String, default: null },
   bottomStyle: { type: String, required: true }, // 'tie-side' | 'classic'
   bottomColour: { type: String, required: true },
+  bottomImageUrl: { type: String, default: null },
   activeComponent: { type: String, default: null }, // 'left' | 'right' | 'bottom' | null
   previewWidth: { type: Number, default: 280 },
   showHint: { type: Boolean, default: true },
