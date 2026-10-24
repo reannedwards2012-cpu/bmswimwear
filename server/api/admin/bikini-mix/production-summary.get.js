@@ -1,19 +1,27 @@
 /**
  * GET /api/admin/bikini-mix/production-summary
  *
- * Admin-only. Sewing/cutting quantities grouped by garment component, size,
- * fabric colour, style and coverage — e.g. "Pink left triangles, size M: 3",
- * "Tie-Side bottoms, cheeky coverage, size M, red: 2" (brief's own examples).
+ * Admin-only. Two views over the same confirmed/non-test booking rows:
+ *
+ * 1. Grouped cutting/sewing quantities by garment component, size, fabric
+ *    colour, style and coverage — e.g. "Pink left triangles, size M: 3",
+ *    "Tie-Side bottoms, cheeky coverage, size M, red: 2" (brief's own
+ *    examples) — for bulk cutting.
+ * 2. A per-guest checklist row (one per booking) — for tracking which
+ *    individual bases are physically prepared, via base_prepared_at
+ *    (supabase/migrations/20261024000000_bikini_mix_base_prepared.sql) —
+ *    a purely operational flag never read by any payment/capacity logic.
  *
  * Only status = 'confirmed' bookings contribute — NOT 'paid_needs_review'
  * (a verified payment that isn't a confirmed reservation yet; see the
  * migration's confirm_bikini_mix_booking_payment()), and not
  * 'pending_payment' / 'expired' / 'cancelled'. Also excludes is_test
  * bookings (server/utils/bikiniMixTestMode.js) — admin test runs must
- * never distort real cutting/sewing quantities.
+ * never distort real cutting/sewing quantities or the checklist.
  */
 import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../utils/authUser.js'
+import { formatBookingNumber } from '../../../utils/bikiniMixMappers.js'
 
 function groupCount(rows, keyFn) {
   const totals = new Map()
@@ -34,10 +42,11 @@ export default defineEventHandler(async (event) => {
     const { data, error } = await supabase
       .from('bikini_mix_bookings')
       .select(
-        'top_size, left_fabric_name_snapshot, right_fabric_name_snapshot, bottom_style, bottom_coverage, bottom_size, bottom_fabric_name_snapshot'
+        'id, booking_number, full_name, package, top_size, left_fabric_name_snapshot, right_fabric_name_snapshot, bottom_style, bottom_coverage, bottom_size, bottom_fabric_name_snapshot, base_prepared_at'
       )
       .eq('status', 'confirmed')
       .eq('is_test', false)
+      .order('created_at', { ascending: true })
 
     if (error) {
       console.error('[admin/bikini-mix/production-summary] query failed:', error.message)
@@ -56,11 +65,27 @@ export default defineEventHandler(async (event) => {
       colour: r.bottom_fabric_name_snapshot
     }))
 
+    const bookings = rows.map((r) => ({
+      id: r.id,
+      bookingNumber: formatBookingNumber(r.booking_number),
+      fullName: r.full_name,
+      package: r.package === 'the_works' ? 'The Works' : 'Classic Mix',
+      topSize: r.top_size,
+      leftFabricName: r.left_fabric_name_snapshot,
+      rightFabricName: r.right_fabric_name_snapshot,
+      bottomStyle: r.bottom_style === 'tie-side' ? 'Tie-Side' : 'Classic',
+      bottomCoverage: r.bottom_coverage === 'cheeky' ? 'Cheeky' : 'Bikini',
+      bottomSize: r.bottom_size,
+      bottomFabricName: r.bottom_fabric_name_snapshot,
+      basePreparedAt: r.base_prepared_at
+    }))
+
     return {
       confirmedCount: rows.length,
       leftTriangles,
       rightTriangles,
-      bottoms
+      bottoms,
+      bookings
     }
   } catch (err) {
     console.error('[admin/bikini-mix/production-summary] unexpected error:', err?.message)

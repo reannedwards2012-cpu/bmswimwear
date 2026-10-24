@@ -134,7 +134,7 @@ export const BOOKING_DETAIL_SELECT = `
   bottom_fabric_id, bottom_fabric_name_snapshot, bottom_fabric_hex_snapshot,
   full_name, email, whatsapp, personalization_name, marketing_opt_in, terms_accepted_at,
   payment_provider, go2pay_order_id, payment_id, paid_at, admin_notes,
-  paid_email_sent_at, is_test, created_at, updated_at
+  paid_email_sent_at, base_prepared_at, is_test, created_at, updated_at
 `.trim()
 
 /** 'pending_payment' past its hold is shown as expired — WITHOUT mutating the row. */
@@ -198,6 +198,7 @@ export function mapBookingDetail(row) {
     paidAt: row.paid_at,
     adminNotes: row.admin_notes,
     paidEmailSentAt: row.paid_email_sent_at,
+    basePreparedAt: row.base_prepared_at,
     isTest: row.is_test === true,
     createdAt: row.created_at,
     updatedAt: row.updated_at

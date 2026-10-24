@@ -27,6 +27,9 @@ function stubGlobals() {
   })
   vi.stubGlobal('getRouterParam', (e, k) => e._params?.[k])
   vi.stubGlobal('getQuery', (e) => e._query ?? {})
+  vi.stubGlobal('setResponseHeaders', (e, h) => {
+    e._headers = { ...(e._headers || {}), ...h }
+  })
 }
 
 const event = (body, params = {}, query = {}) => ({ _body: body, _params: params, _query: query, _status: 200 })
@@ -283,5 +286,315 @@ describe('GET /api/admin/bikini-mix/production-summary', () => {
     expect(res.leftTriangles).toContainEqual({ colour: 'Yellow', size: 'S', count: 2 })
     expect(res.bottoms).toContainEqual({ style: 'Classic', coverage: 'Bikini', size: 'L', colour: 'Pink', count: 3 })
     expect(res.bottoms).toContainEqual({ style: 'Tie-Side', coverage: 'Cheeky', size: 'M', colour: 'Red', count: 2 })
+  })
+
+  it('also returns a per-guest checklist row (the grouped totals above stay unchanged)', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const rows = [
+      {
+        id: 'b-1',
+        booking_number: 7,
+        full_name: 'Jane Guest',
+        package: 'the_works',
+        top_size: 'M',
+        left_fabric_name_snapshot: 'Teal',
+        right_fabric_name_snapshot: 'Coral',
+        bottom_style: 'tie-side',
+        bottom_coverage: 'cheeky',
+        bottom_size: 'S',
+        bottom_fabric_name_snapshot: 'Ivory',
+        base_prepared_at: null
+      }
+    ]
+    const supabase = makeTrackedSupabase({ bikini_mix_bookings: () => ({ data: rows, error: null }) })
+    supabaseAdmin.mockReturnValue(supabase)
+    const handler = await loadHandler()
+
+    const res = await handler(event())
+
+    expect(res.bookings).toEqual([
+      {
+        id: 'b-1',
+        bookingNumber: 'BKM-000007',
+        fullName: 'Jane Guest',
+        package: 'The Works',
+        topSize: 'M',
+        leftFabricName: 'Teal',
+        rightFabricName: 'Coral',
+        bottomStyle: 'Tie-Side',
+        bottomCoverage: 'Cheeky',
+        bottomSize: 'S',
+        bottomFabricName: 'Ivory',
+        basePreparedAt: null
+      }
+    ])
+  })
+})
+
+describe('PATCH /api/admin/bikini-mix/bookings/:id/prepared', () => {
+  async function loadHandler() {
+    stubGlobals()
+    return (await import('../server/api/admin/bikini-mix/bookings/[id]/prepared.patch.js')).default
+  }
+  const BOOKING_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+
+  it('non-admin cannot toggle prepared status — zero Supabase calls', async () => {
+    requireAdmin.mockRejectedValue(Object.assign(new Error('Admin access required'), { statusCode: 403 }))
+    const fromSpy = vi.fn()
+    supabaseAdmin.mockReturnValue({ from: fromSpy })
+    const handler = await loadHandler()
+
+    await expect(handler(event({ prepared: true }, { id: BOOKING_ID }))).rejects.toThrow('Admin access required')
+    expect(fromSpy).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-boolean body before touching Supabase', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const fromSpy = vi.fn()
+    supabaseAdmin.mockReturnValue({ from: fromSpy })
+    const handler = await loadHandler()
+
+    const ev = event({ prepared: 'yes' }, { id: BOOKING_ID })
+    const res = await handler(ev)
+    expect(ev._status).toBe(400)
+    expect(res.error).toBeTruthy()
+    expect(fromSpy).not.toHaveBeenCalled()
+  })
+
+  it('rejects an invalid booking id before touching Supabase', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const fromSpy = vi.fn()
+    supabaseAdmin.mockReturnValue({ from: fromSpy })
+    const handler = await loadHandler()
+
+    const ev = event({ prepared: true }, { id: 'not-a-uuid' })
+    const res = await handler(ev)
+    expect(ev._status).toBe(400)
+    expect(fromSpy).not.toHaveBeenCalled()
+  })
+
+  it('setting prepared:true on a confirmed booking writes a timestamp to base_prepared_at only — no other column', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const supabase = makeTrackedSupabase({
+      bikini_mix_bookings: (state) =>
+        state.op === 'select'
+          ? { data: { id: BOOKING_ID, status: 'confirmed' }, error: null }
+          : { data: { id: BOOKING_ID, base_prepared_at: '2026-10-24T18:00:00.000Z' }, error: null }
+    })
+    supabaseAdmin.mockReturnValue(supabase)
+    const handler = await loadHandler()
+
+    const res = await handler(event({ prepared: true }, { id: BOOKING_ID }))
+
+    expect(res.basePreparedAt).toBe('2026-10-24T18:00:00.000Z')
+    const call = supabase._calls.find((c) => c.table === 'bikini_mix_bookings' && c.op === 'update')
+    expect(Object.keys(call.payload)).toEqual(['base_prepared_at'])
+    expect(typeof call.payload.base_prepared_at).toBe('string')
+    expect(call.filters.some(([k, v]) => k === 'status' && v === 'confirmed')).toBe(true)
+  })
+
+  it('setting prepared:false clears base_prepared_at back to null', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const supabase = makeTrackedSupabase({
+      bikini_mix_bookings: (state) =>
+        state.op === 'select' ? { data: { id: BOOKING_ID, status: 'confirmed' }, error: null } : { data: { id: BOOKING_ID, base_prepared_at: null }, error: null }
+    })
+    supabaseAdmin.mockReturnValue(supabase)
+    const handler = await loadHandler()
+
+    const res = await handler(event({ prepared: false }, { id: BOOKING_ID }))
+
+    expect(res.basePreparedAt).toBeNull()
+    const call = supabase._calls.find((c) => c.table === 'bikini_mix_bookings' && c.op === 'update')
+    expect(call.payload.base_prepared_at).toBeNull()
+  })
+
+  it('404s when the booking does not exist', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const supabase = makeTrackedSupabase({ bikini_mix_bookings: () => ({ data: null, error: null }) })
+    supabaseAdmin.mockReturnValue(supabase)
+    const handler = await loadHandler()
+
+    const ev = event({ prepared: true }, { id: BOOKING_ID })
+    const res = await handler(ev)
+    expect(ev._status).toBe(404)
+    expect(res.error).toBeTruthy()
+  })
+
+  it.each(['pending_payment', 'paid_needs_review', 'cancelled', 'expired'])(
+    'refuses to mark a %s (non-confirmed) booking as prepared — never updates it',
+    async (status) => {
+      requireAdmin.mockResolvedValue({ id: 'admin-1' })
+      const supabase = makeTrackedSupabase({
+        bikini_mix_bookings: () => ({ data: { id: BOOKING_ID, status }, error: null })
+      })
+      supabaseAdmin.mockReturnValue(supabase)
+      const handler = await loadHandler()
+
+      const ev = event({ prepared: true }, { id: BOOKING_ID })
+      const res = await handler(ev)
+
+      expect(ev._status).toBe(409)
+      expect(res.error).toMatch(/confirmed/i)
+      expect(supabase._calls.some((c) => c.table === 'bikini_mix_bookings' && c.op === 'update')).toBe(false)
+    }
+  )
+
+  it('never touches status, payment, or capacity-related columns', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const supabase = makeTrackedSupabase({
+      bikini_mix_bookings: (state) =>
+        state.op === 'select'
+          ? { data: { id: BOOKING_ID, status: 'confirmed' }, error: null }
+          : { data: { id: BOOKING_ID, base_prepared_at: '2026-10-24T18:00:00.000Z' }, error: null }
+    })
+    supabaseAdmin.mockReturnValue(supabase)
+    const handler = await loadHandler()
+
+    await handler(event({ prepared: true }, { id: BOOKING_ID }))
+
+    const call = supabase._calls.find((c) => c.table === 'bikini_mix_bookings' && c.op === 'update')
+    expect(call.payload).not.toHaveProperty('status')
+    expect(call.payload).not.toHaveProperty('paid_at')
+    expect(call.payload).not.toHaveProperty('charged_usd_cents')
+  })
+})
+
+describe('GET /api/admin/bikini-mix/bookings/export', () => {
+  async function loadHandler() {
+    stubGlobals()
+    return (await import('../server/api/admin/bikini-mix/bookings/export.get.js')).default
+  }
+
+  it('non-admin cannot export — zero Supabase calls', async () => {
+    requireAdmin.mockRejectedValue(Object.assign(new Error('Admin access required'), { statusCode: 403 }))
+    const fromSpy = vi.fn()
+    supabaseAdmin.mockReturnValue({ from: fromSpy })
+    const handler = await loadHandler()
+
+    await expect(handler(event())).rejects.toThrow('Admin access required')
+    expect(fromSpy).not.toHaveBeenCalled()
+  })
+
+  it('queries only status = confirmed and is_test = false', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const supabase = makeTrackedSupabase({ bikini_mix_bookings: () => ({ data: [], error: null }) })
+    supabaseAdmin.mockReturnValue(supabase)
+    const handler = await loadHandler()
+
+    await handler(event())
+
+    const call = supabase._calls.find((c) => c.table === 'bikini_mix_bookings')
+    expect(call.filters).toEqual([
+      ['status', 'confirmed'],
+      ['is_test', false]
+    ])
+  })
+
+  it('returns the exact column headers in the requested order', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const supabase = makeTrackedSupabase({ bikini_mix_bookings: () => ({ data: [], error: null }) })
+    supabaseAdmin.mockReturnValue(supabase)
+    const handler = await loadHandler()
+
+    const csv = await handler(event())
+    const headerLine = csv.split('\r\n')[0]
+
+    expect(headerLine).toBe(
+      [
+        'Booking Reference',
+        'Customer Name',
+        'Email',
+        'WhatsApp',
+        'Package',
+        'Top Size',
+        'Left Triangle Fabric',
+        'Right Triangle Fabric',
+        'Bottom Size',
+        'Bottom Fabric',
+        'Bottom Style',
+        'Coverage',
+        'Personalization Name',
+        'Amount Paid (USD)',
+        'Booking Date'
+      ].join(',')
+    )
+  })
+
+  it('formats a booking row correctly, including amount/date formatting', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const rows = [
+      {
+        booking_number: 3,
+        full_name: 'Jane Guest',
+        email: 'jane@example.com',
+        whatsapp: '+1 473 555 1234',
+        package: 'the_works',
+        top_size: 'M',
+        left_fabric_name_snapshot: 'Teal',
+        right_fabric_name_snapshot: 'Coral',
+        bottom_size: 'S',
+        bottom_fabric_name_snapshot: 'Ivory',
+        bottom_style: 'tie-side',
+        bottom_coverage: 'cheeky',
+        personalization_name: 'Jane',
+        charged_usd_cents: 7407,
+        created_at: '2026-10-19T14:32:00.000Z'
+      }
+    ]
+    const supabase = makeTrackedSupabase({ bikini_mix_bookings: () => ({ data: rows, error: null }) })
+    supabaseAdmin.mockReturnValue(supabase)
+    const handler = await loadHandler()
+
+    const csv = await handler(event())
+    const dataLine = csv.split('\r\n')[1]
+
+    expect(dataLine).toBe(
+      ['BKM-000003', 'Jane Guest', 'jane@example.com', '+1 473 555 1234', 'The Works', 'M', 'Teal', 'Coral', 'S', 'Ivory', 'Tie-Side', 'Cheeky', 'Jane', '74.07', '2026-10-19'].join(
+        ','
+      )
+    )
+  })
+
+  it('escapes a comma in a free-text field (e.g. a name) per CSV rules', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const rows = [
+      {
+        booking_number: 4,
+        full_name: 'Guest, Jr.',
+        email: 'guest@example.com',
+        whatsapp: '+1',
+        package: 'classic_mix',
+        top_size: 'M',
+        left_fabric_name_snapshot: 'Teal',
+        right_fabric_name_snapshot: 'Teal',
+        bottom_size: 'M',
+        bottom_fabric_name_snapshot: 'Teal',
+        bottom_style: 'classic',
+        bottom_coverage: 'bikini',
+        personalization_name: null,
+        charged_usd_cents: 5926,
+        created_at: '2026-10-19T00:00:00.000Z'
+      }
+    ]
+    const supabase = makeTrackedSupabase({ bikini_mix_bookings: () => ({ data: rows, error: null }) })
+    supabaseAdmin.mockReturnValue(supabase)
+    const handler = await loadHandler()
+
+    const csv = await handler(event())
+    expect(csv).toContain('"Guest, Jr."')
+  })
+
+  it('sets CSV content-type and a downloadable filename', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const supabase = makeTrackedSupabase({ bikini_mix_bookings: () => ({ data: [], error: null }) })
+    supabaseAdmin.mockReturnValue(supabase)
+    const handler = await loadHandler()
+
+    const ev = event()
+    await handler(ev)
+
+    expect(ev._headers['Content-Type']).toMatch(/text\/csv/)
+    expect(ev._headers['Content-Disposition']).toMatch(/attachment; filename="bikini-mix-bookings-.*\.csv"/)
   })
 })
