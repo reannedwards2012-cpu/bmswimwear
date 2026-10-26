@@ -36,9 +36,10 @@ export default defineEventHandler(async (event) => {
         unit: fields.unit,
         quantity: fields.quantity,
         hex_color: fields.hexColor,
-        image_url: fields.imageUrl
+        image_url: fields.imageUrl,
+        unit_cost_xcd_cents: fields.unitCostXcdCents ?? null
       })
-      .select('id, name, slug, type, hex_color, image_url, quantity, unit, status, is_active')
+      .select('id, name, slug, type, hex_color, image_url, quantity, unit, status, is_active, unit_cost_xcd_cents')
       .single()
 
     if (insertError || !fabric) {
@@ -84,6 +85,7 @@ export default defineEventHandler(async (event) => {
         unit: fabric.unit,
         status: fabric.status,
         isActive: fabric.is_active,
+        unitCostXcdCents: fabric.unit_cost_xcd_cents,
         productIds: productIdsResult
       },
       warning

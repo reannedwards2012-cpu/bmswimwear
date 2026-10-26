@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
     const { data, error } = await supabase
       .from('fabrics')
       .select(
-        'id, name, slug, type, hex_color, image_url, quantity, unit, status, is_active, product_fabrics(product_id)'
+        'id, name, slug, type, hex_color, image_url, quantity, unit, status, is_active, unit_cost_xcd_cents, product_fabrics(product_id)'
       )
       .order('name', { ascending: true })
 
@@ -38,6 +38,7 @@ export default defineEventHandler(async (event) => {
       unit: row.unit,
       status: row.status,
       isActive: row.is_active,
+      unitCostXcdCents: row.unit_cost_xcd_cents,
       productIds: (row.product_fabrics ?? []).map((pf) => pf.product_id)
     }))
 

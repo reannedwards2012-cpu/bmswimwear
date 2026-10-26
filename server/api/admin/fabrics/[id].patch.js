@@ -21,7 +21,8 @@ const FIELD_MAP = {
   unit: 'unit',
   quantity: 'quantity',
   hexColor: 'hex_color',
-  imageUrl: 'image_url'
+  imageUrl: 'image_url',
+  unitCostXcdCents: 'unit_cost_xcd_cents'
 }
 
 export default defineEventHandler(async (event) => {
@@ -120,7 +121,7 @@ export default defineEventHandler(async (event) => {
     const { data: fabric, error: readError } = await supabase
       .from('fabrics')
       .select(
-        'id, name, slug, type, hex_color, image_url, quantity, unit, status, is_active, product_fabrics(product_id)'
+        'id, name, slug, type, hex_color, image_url, quantity, unit, status, is_active, unit_cost_xcd_cents, product_fabrics(product_id)'
       )
       .eq('id', id)
       .maybeSingle()
@@ -143,6 +144,7 @@ export default defineEventHandler(async (event) => {
         unit: fabric.unit,
         status: fabric.status,
         isActive: fabric.is_active,
+        unitCostXcdCents: fabric.unit_cost_xcd_cents,
         productIds: (fabric.product_fabrics ?? []).map((pf) => pf.product_id)
       }
     }

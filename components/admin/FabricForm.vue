@@ -134,6 +134,22 @@
           </label>
         </div>
 
+        <label class="block">
+          <span class="text-xs font-semibold uppercase tracking-widest2 text-ink/60">Landed cost (EC$/unit)</span>
+          <input
+            v-model="form.unitCostXcdDollars"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="—"
+            class="mt-1.5 w-full rounded-2xl border border-ink/15 bg-sand/60 px-4 py-2.5 text-sm text-ink focus:border-coral focus:outline-none"
+          />
+          <p class="mt-1.5 text-xs text-ink/40">
+            Include shipping and import charges. Used by the Quote Calculator to auto-fill fabric cost; leave blank to use its
+            default solid/printed rate instead.
+          </p>
+        </label>
+
         <label class="flex items-center gap-2 text-sm text-ink/70">
           <input v-model="form.isActive" type="checkbox" class="h-4 w-4 accent-coral" />
           Active (visible on the storefront)
@@ -216,6 +232,7 @@ function blankForm() {
     unit: '',
     status: 'available',
     isActive: true,
+    unitCostXcdDollars: '',
     productIds: []
   }
 }
@@ -231,6 +248,7 @@ function fromFabric(f) {
     unit: f.unit ?? '',
     status: f.status ?? 'available',
     isActive: f.isActive ?? true,
+    unitCostXcdDollars: f.unitCostXcdCents != null ? (f.unitCostXcdCents / 100).toFixed(2) : '',
     productIds: [...(f.productIds ?? [])]
   }
 }
@@ -303,6 +321,7 @@ function onSubmit() {
     unit: form.unit || null,
     status: form.status,
     isActive: form.isActive,
+    unitCostXcdCents: form.unitCostXcdDollars === '' ? null : Math.round(Number(form.unitCostXcdDollars) * 100),
     productIds: form.productIds
   })
 }

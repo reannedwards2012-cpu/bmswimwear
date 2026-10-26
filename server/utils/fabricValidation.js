@@ -113,6 +113,20 @@ export function validateFabricFields(body, { partial = false } = {}) {
     out.imageUrl = imageUrl
   }
 
+  // Landed cost (incl. shipping/import) per unit, used by the Quote
+  // Calculator's fabric auto-retrieval. Nullable — unset means the
+  // calculator falls back to its own solid/printed default rate rather
+  // than assuming this fabric's cost.
+  if (provided('unitCostXcdCents')) {
+    if (isEmpty(b.unitCostXcdCents)) {
+      out.unitCostXcdCents = null
+    } else {
+      const cost = typeof b.unitCostXcdCents === 'number' ? b.unitCostXcdCents : Number(b.unitCostXcdCents)
+      if (!Number.isFinite(cost) || cost < 0) issues.push('Unit cost must be null or a number ≥ 0.')
+      out.unitCostXcdCents = Math.round(cost)
+    }
+  }
+
   return { issues, fields: out }
 }
 
