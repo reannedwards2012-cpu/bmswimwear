@@ -13,7 +13,8 @@
     @click="$emit('select')"
   >
     <span class="grid w-full place-items-center">
-      <svg :width="width" :height="height" :viewBox="`0 0 ${piece.w} ${piece.h}`">
+      <BikiniMixArtPlaceholder v-if="piece.missing" :width="width" :height="height" />
+      <svg v-else :width="width" :height="height" :viewBox="`0 0 ${piece.w} ${piece.h}`">
         <g :transform="piece.transform" fill="#5A4035" stroke="none">
           <path :d="piece.d" />
         </g>
@@ -41,5 +42,5 @@ const props = defineProps({
 defineEmits(['select'])
 
 const piece = computed(() => BIKINI_ART[props.artKey])
-const height = computed(() => Math.round((piece.value.h / piece.value.w) * props.width))
+const height = computed(() => (piece.value.missing ? props.width : Math.round((piece.value.h / piece.value.w) * props.width)))
 </script>

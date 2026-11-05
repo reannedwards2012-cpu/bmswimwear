@@ -29,20 +29,28 @@ describe('validateEventFields', () => {
   })
 
   it('prices must be non-negative integer cents', () => {
-    expect(validateEventFields({ classicMixPriceXcdCents: -1 }, { partial: true }).issues.length).toBeGreaterThan(0)
-    expect(validateEventFields({ theWorksPriceXcdCents: 1.5 }, { partial: true }).issues.length).toBeGreaterThan(0)
-    const ok = validateEventFields({ classicMixPriceXcdCents: 16000 }, { partial: true })
+    expect(validateEventFields({ regularPriceXcdCents: -1 }, { partial: true }).issues.length).toBeGreaterThan(0)
+    expect(validateEventFields({ earlyBirdPriceXcdCents: 1.5 }, { partial: true }).issues.length).toBeGreaterThan(0)
+    const ok = validateEventFields({ regularPriceXcdCents: 25000 }, { partial: true })
     expect(ok.issues).toEqual([])
-    expect(ok.fields.classicMixPriceXcdCents).toBe(16000)
+    expect(ok.fields.regularPriceXcdCents).toBe(25000)
   })
 
-  it('inclusions must be a list of reasonable strings', () => {
-    const { issues, fields } = validateEventFields({ classicMixInclusions: ['6 beads', '1 charm'] }, { partial: true })
+  it('early bird slot count must be a positive integer', () => {
+    expect(validateEventFields({ earlyBirdSlots: 0 }, { partial: true }).issues.length).toBeGreaterThan(0)
+    expect(validateEventFields({ earlyBirdSlots: 1.5 }, { partial: true }).issues.length).toBeGreaterThan(0)
+    const ok = validateEventFields({ earlyBirdSlots: 3 }, { partial: true })
+    expect(ok.issues).toEqual([])
+    expect(ok.fields.earlyBirdSlots).toBe(3)
+  })
+
+  it('ticket inclusions must be a list of reasonable strings', () => {
+    const { issues, fields } = validateEventFields({ ticketInclusions: ['The swimsuit', 'Event access'] }, { partial: true })
     expect(issues).toEqual([])
-    expect(fields.classicMixInclusions).toEqual(['6 beads', '1 charm'])
+    expect(fields.ticketInclusions).toEqual(['The swimsuit', 'Event access'])
   })
   it('rejects a non-array inclusions value', () => {
-    const { issues } = validateEventFields({ theWorksInclusions: 'not an array' }, { partial: true })
+    const { issues } = validateEventFields({ ticketInclusions: 'not an array' }, { partial: true })
     expect(issues.length).toBeGreaterThan(0)
   })
 
@@ -121,59 +129,95 @@ describe('validateBookingResolution', () => {
   })
 })
 
-function checkoutPayload(overrides = {}) {
+function bikiniPayload(overrides = {}) {
   return {
     checkoutIdempotencyKey: '11111111-1111-1111-1111-111111111111',
-    package: 'classic_mix',
+    garmentType: 'bikini',
     topSize: 'M',
     bottomSize: 'M',
     bottomStyle: 'tie-side',
     bottomCoverage: 'bikini',
+    bottomScrunch: false,
     leftFabricId: '22222222-2222-2222-2222-222222222222',
     rightFabricId: '22222222-2222-2222-2222-222222222222',
     bottomFabricId: '22222222-2222-2222-2222-222222222222',
     fullName: 'Jane Guest',
     email: 'jane@example.com',
     whatsapp: '+1 473 555 1234',
-    personalizationName: null,
     marketingOptIn: false,
     termsAccepted: true,
     ...overrides
   }
 }
 
+function onepiecePayload(overrides = {}) {
+  return {
+    checkoutIdempotencyKey: '11111111-1111-1111-1111-111111111111',
+    garmentType: 'onepiece',
+    onepieceSize: 'M',
+    onepieceCoverage: 'cheeky',
+    onepieceFabricId: '22222222-2222-2222-2222-222222222222',
+    fullName: 'Jane Guest',
+    email: 'jane@example.com',
+    whatsapp: '+1 473 555 1234',
+    marketingOptIn: false,
+    termsAccepted: true,
+    ...overrides
+  }
+}
+
+// kept as the legacy alias name used by older tests in this file
+const checkoutPayload = bikiniPayload
+
 describe('validateBookingCheckout', () => {
-  it('accepts a fully valid Classic Mix payload', () => {
-    const { issues, fields } = validateBookingCheckout(checkoutPayload())
+  it('accepts a fully valid bikini payload', () => {
+    const { issues, fields } = validateBookingCheckout(bikiniPayload())
     expect(issues).toEqual([])
-    expect(fields.package).toBe('classic_mix')
-    expect(fields.personalizationName).toBeNull()
+    expect(fields.garmentType).toBe('bikini')
+    expect(fields.onepieceFabricId).toBeNull()
   })
 
-  it('requires personalizationName for The Works', () => {
-    const { issues } = validateBookingCheckout(checkoutPayload({ package: 'the_works', personalizationName: null }))
-    expect(issues.some((i) => /personalization/i.test(i))).toBe(true)
-  })
-
-  it('accepts The Works with a personalization name', () => {
-    const { issues } = validateBookingCheckout(checkoutPayload({ package: 'the_works', personalizationName: 'Jane' }))
+  it('accepts a fully valid one-piece payload, with bikini-only fields nulled out', () => {
+    const { issues, fields } = validateBookingCheckout(onepiecePayload())
     expect(issues).toEqual([])
+    expect(fields.garmentType).toBe('onepiece')
+    expect(fields.onepieceSize).toBe('M')
+    expect(fields.onepieceCoverage).toBe('cheeky')
+    expect(fields.onepieceFabricId).toBe('22222222-2222-2222-2222-222222222222')
+    expect(fields.topSize).toBeNull()
+    expect(fields.bottomStyle).toBeNull()
+    expect(fields.leftFabricId).toBeNull()
   })
 
-  it('rejects an invalid package', () => {
-    const { issues } = validateBookingCheckout(checkoutPayload({ package: 'deluxe_mix' }))
-    expect(issues.some((i) => /package/i.test(i))).toBe(true)
+  it('rejects a missing/invalid garmentType', () => {
+    const { issues } = validateBookingCheckout(bikiniPayload({ garmentType: 'tankini' }))
+    expect(issues.some((i) => /garmentType/.test(i))).toBe(true)
+  })
+
+  it('a one-piece payload never requires bottomStyle/bottomCoverage/scrunch', () => {
+    const { issues } = validateBookingCheckout(onepiecePayload())
+    expect(issues.some((i) => /bottomStyle|bottomCoverage/.test(i))).toBe(false)
+  })
+
+  it('rejects an incomplete one-piece payload (missing fabric)', () => {
+    const { issues } = validateBookingCheckout(onepiecePayload({ onepieceFabricId: null }))
+    expect(issues.some((i) => /onepieceFabricId/.test(i))).toBe(true)
+  })
+
+  it('bottomScrunch defaults to false and accepts true', () => {
+    expect(validateBookingCheckout(bikiniPayload()).fields.bottomScrunch).toBe(false)
+    expect(validateBookingCheckout(bikiniPayload({ bottomScrunch: true })).fields.bottomScrunch).toBe(true)
   })
 
   it('rejects invalid sizes, style and coverage', () => {
-    const { issues } = validateBookingCheckout(checkoutPayload({ topSize: 'XXL', bottomStyle: 'thong', bottomCoverage: 'full' }))
+    const { issues } = validateBookingCheckout(bikiniPayload({ topSize: 'XXL', bottomStyle: 'thong', bottomCoverage: 'full' }))
     expect(issues.some((i) => /topSize/.test(i))).toBe(true)
     expect(issues.some((i) => /bottomStyle/.test(i))).toBe(true)
     expect(issues.some((i) => /bottomCoverage/.test(i))).toBe(true)
   })
 
   it('rejects non-UUID fabric ids', () => {
-    const { issues } = validateBookingCheckout(checkoutPayload({ leftFabricId: 'not-a-uuid' }))
+    const { issues } = validateBookingCheckout(bikiniPayload({ leftFabricId: 'not-a-uuid' }))
     expect(issues.some((i) => /leftFabricId/.test(i))).toBe(true)
   })
 
@@ -200,5 +244,46 @@ describe('validateBookingCheckout', () => {
   it('rejects a missing checkoutIdempotencyKey', () => {
     const { issues } = validateBookingCheckout(checkoutPayload({ checkoutIdempotencyKey: null }))
     expect(issues.some((i) => /checkoutIdempotencyKey/.test(i))).toBe(true)
+  })
+
+  it('measurements are entirely optional — a payload with none provided is still valid', () => {
+    const { issues, fields } = validateBookingCheckout(bikiniPayload())
+    expect(issues).toEqual([])
+    expect(fields.bustInches).toBeNull()
+    expect(fields.underbustInches).toBeNull()
+    expect(fields.waistInches).toBeNull()
+    expect(fields.hipsInches).toBeNull()
+  })
+
+  it('accepts a full set of valid decimal measurements', () => {
+    const { issues, fields } = validateBookingCheckout(
+      bikiniPayload({ bustInches: 36.5, underbustInches: 30, waistInches: 28.5, hipsInches: 39 })
+    )
+    expect(issues).toEqual([])
+    expect(fields.bustInches).toBe(36.5)
+    expect(fields.underbustInches).toBe(30)
+    expect(fields.waistInches).toBe(28.5)
+    expect(fields.hipsInches).toBe(39)
+  })
+
+  it('accepts a partial set of measurements, leaving the rest null', () => {
+    const { issues, fields } = validateBookingCheckout(bikiniPayload({ waistInches: 27 }))
+    expect(issues).toEqual([])
+    expect(fields.waistInches).toBe(27)
+    expect(fields.bustInches).toBeNull()
+    expect(fields.underbustInches).toBeNull()
+    expect(fields.hipsInches).toBeNull()
+  })
+
+  it('rejects a non-numeric, zero, negative, or unrealistic measurement', () => {
+    expect(validateBookingCheckout(bikiniPayload({ bustInches: 'abc' })).issues.some((i) => /Bust/.test(i))).toBe(true)
+    expect(validateBookingCheckout(bikiniPayload({ waistInches: 0 })).issues.some((i) => /Waist/.test(i))).toBe(true)
+    expect(validateBookingCheckout(bikiniPayload({ hipsInches: -5 })).issues.some((i) => /Hips/.test(i))).toBe(true)
+    expect(validateBookingCheckout(bikiniPayload({ underbustInches: 999 })).issues.some((i) => /Underbust/.test(i))).toBe(true)
+  })
+
+  it('rounds a measurement to one decimal place', () => {
+    const { fields } = validateBookingCheckout(bikiniPayload({ bustInches: 36.456 }))
+    expect(fields.bustInches).toBe(36.5)
   })
 })

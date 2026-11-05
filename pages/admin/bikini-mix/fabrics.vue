@@ -1,27 +1,35 @@
 <template>
   <div>
-    <FancyHeading eyebrow="Admin" title="Bikini *Mix*" size="sm" as="h1" />
+    <FancyHeading eyebrow="Admin" title="Swimsuit *Mixer*" size="sm" as="h1" />
     <AdminBikiniMixSubNav class="mt-6" />
 
     <p class="mt-6 text-sm text-ink/60">
-      Toggle which existing fabrics customers can choose from in the Bikini Mix builder. Reuses the same fabric
-      inventory used everywhere else on the site — nothing here duplicates or edits a fabric itself.
+      Toggle which existing fabrics customers can choose from in the Swimsuit Mixer builder, and which of those are
+      specifically eligible for one-pieces (not every bikini fabric is assumed to be available for one-pieces).
+      Reuses the same fabric inventory used everywhere else on the site — nothing here duplicates or edits a fabric
+      itself.
     </p>
+
+    <div v-if="previewMode" class="mt-4 rounded-2xl bg-coral/10 px-4 py-3 text-sm text-ink/70">
+      🔧 <strong>Preview mode</strong> — the Swimsuit Mixer database migration hasn't been applied yet, so this table
+      is showing local mock data. Toggles are fully interactive but only update this mock data in memory.
+    </div>
 
     <p v-if="pending && !data" class="mt-8 rounded-4xl bg-cream p-7 text-sm text-ink/50 shadow-card">Loading fabrics…</p>
 
-    <div v-else-if="loadError" class="mt-8 rounded-4xl bg-cream p-7 text-center shadow-card">
+    <div v-else-if="loadError && !previewMode" class="mt-8 rounded-4xl bg-cream p-7 text-center shadow-card">
       <p class="text-sm text-coral">Couldn’t load fabrics.</p>
       <button type="button" class="btn-outline mt-4" @click="refresh">Try again</button>
     </div>
 
     <div v-else class="mt-6 overflow-x-auto rounded-4xl bg-cream shadow-card">
-      <table class="w-full min-w-[32rem] text-left text-sm">
+      <table class="w-full min-w-[40rem] text-left text-sm">
         <thead>
           <tr class="border-b border-ink/10 text-xs font-semibold uppercase tracking-widest2 text-ink/50">
             <th class="px-5 py-4">Fabric</th>
             <th class="px-5 py-4">Status</th>
-            <th class="px-5 py-4">Bikini Mix</th>
+            <th class="px-5 py-4">Swimsuit Mixer</th>
+            <th class="px-5 py-4">One-piece eligible</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-ink/10">
@@ -43,9 +51,21 @@
                 :class="f.bikiniMixActive ? 'bg-coral' : 'bg-ink/15'"
                 :disabled="togglingId === f.fabricId"
                 :aria-pressed="f.bikiniMixActive"
-                @click="toggle(f)"
+                @click="toggle(f, 'isActive')"
               >
                 <span class="inline-block h-4 w-4 transform rounded-full bg-cream transition-transform" :class="f.bikiniMixActive ? 'translate-x-6' : 'translate-x-1'" />
+              </button>
+            </td>
+            <td class="px-5 py-4">
+              <button
+                type="button"
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                :class="f.eligibleForOnepiece ? 'bg-coral' : 'bg-ink/15'"
+                :disabled="togglingId === f.fabricId"
+                :aria-pressed="f.eligibleForOnepiece"
+                @click="toggle(f, 'eligibleForOnepiece')"
+              >
+                <span class="inline-block h-4 w-4 transform rounded-full bg-cream transition-transform" :class="f.eligibleForOnepiece ? 'translate-x-6' : 'translate-x-1'" />
               </button>
             </td>
           </tr>
@@ -57,10 +77,11 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { mockFabrics } from '~/data/bikiniMixAdminMock.js'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
-useHead({ title: 'Bikini Mix Fabrics — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
+useHead({ title: 'Swimsuit Mixer Fabrics — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
 
 const { getAccessToken } = useAuth()
 async function authedFetch(url, opts = {}) {
@@ -68,21 +89,46 @@ async function authedFetch(url, opts = {}) {
   return $fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: token ? `Bearer ${token}` : '' } })
 }
 
+function isNotConfigured(err) {
+  return err?.statusCode === 503 || err?.data?.configured === false
+}
+
+const previewMode = ref(false)
+
 const { data, pending, error: loadError, refresh } = useLazyAsyncData('bikini-mix-fabrics', () => authedFetch('/api/admin/bikini-mix/fabrics'), {
   server: false
+})
+watch(loadError, (err) => {
+  if (err && isNotConfigured(err)) {
+    previewMode.value = true
+    data.value = { fabrics: mockFabrics() }
+  }
 })
 const fabrics = computed(() => data.value?.fabrics ?? [])
 
 const togglingId = ref(null)
 const toggleError = ref('')
 
-async function toggle(f) {
+const FIELD_BY_KEY = { isActive: 'bikiniMixActive', eligibleForOnepiece: 'eligibleForOnepiece' }
+
+async function toggle(f, field) {
   togglingId.value = f.fabricId
   toggleError.value = ''
-  const next = !f.bikiniMixActive
+  const localKey = FIELD_BY_KEY[field]
+  const next = !f[localKey]
+
+  // Preview mode: the eligible_for_onepiece column/table doesn't exist yet
+  // to PATCH — just flip the mock row's own state in place.
+  if (previewMode.value) {
+    f[localKey] = next
+    togglingId.value = null
+    return
+  }
+
   try {
-    await authedFetch(`/api/admin/bikini-mix/fabrics/${f.fabricId}`, { method: 'PATCH', body: { isActive: next } })
-    f.bikiniMixActive = next
+    const res = await authedFetch(`/api/admin/bikini-mix/fabrics/${f.fabricId}`, { method: 'PATCH', body: { [field]: next } })
+    f.bikiniMixActive = res.isActive
+    f.eligibleForOnepiece = res.eligibleForOnepiece
   } catch (err) {
     toggleError.value = err?.data?.error || 'Could not update this fabric.'
   } finally {

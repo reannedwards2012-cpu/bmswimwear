@@ -14,10 +14,10 @@ function eventRow(overrides = {}) {
     capacity: 12,
     is_bookings_open: false,
     promo_video_url: null,
-    classic_mix_price_xcd_cents: 16000,
-    classic_mix_inclusions: ['1 triangle bikini top'],
-    the_works_price_xcd_cents: 20000,
-    the_works_inclusions: ['1 triangle bikini top'],
+    regular_price_xcd_cents: 25000,
+    early_bird_price_xcd_cents: 22500,
+    early_bird_slots: 3,
+    ticket_inclusions: ['The custom-built swimsuit'],
     hold_minutes: 15,
     top_size_guide: [
       { size: 'XS', bust: '', underbust: '' },
@@ -71,6 +71,22 @@ describe('mapPublicEvent', () => {
     const mapped = mapPublicEvent(eventRow())
     expect(mapped.capacity).toBeUndefined()
     expect(mapped.holdMinutes).toBeUndefined()
+  })
+
+  it('carries earlyBirdRemaining through when the endpoint computes one', () => {
+    const mapped = mapPublicEvent(eventRow({ early_bird_slots: 3 }), true, 2)
+    expect(mapped.earlyBirdRemaining).toBe(2)
+    expect(mapped.earlyBirdAvailable).toBe(true)
+  })
+
+  it('falls back to the full slot count when no remaining count is given (e.g. existing callers/tests)', () => {
+    const mapped = mapPublicEvent(eventRow({ early_bird_slots: 3 }))
+    expect(mapped.earlyBirdRemaining).toBe(3)
+  })
+
+  it('never goes negative, even if more are used than slots allow', () => {
+    const mapped = mapPublicEvent(eventRow({ early_bird_slots: 3 }), false, -2)
+    expect(mapped.earlyBirdRemaining).toBe(0)
   })
 })
 
@@ -143,11 +159,12 @@ describe('mapEvent — sizeGuideComplete (the launch gate)', () => {
     expect(mapEvent(row).sizeGuideComplete).toBe(false)
   })
 
-  it('maps camelCase fields and preserves package pricing/inclusions', () => {
+  it('maps camelCase fields and preserves ticket pricing/inclusions', () => {
     const mapped = mapEvent(eventRow())
-    expect(mapped.classicMixPriceXcdCents).toBe(16000)
-    expect(mapped.theWorksPriceXcdCents).toBe(20000)
-    expect(mapped.classicMixInclusions).toEqual(['1 triangle bikini top'])
+    expect(mapped.regularPriceXcdCents).toBe(25000)
+    expect(mapped.earlyBirdPriceXcdCents).toBe(22500)
+    expect(mapped.earlyBirdSlots).toBe(3)
+    expect(mapped.ticketInclusions).toEqual(['The custom-built swimsuit'])
     expect(mapped.capacity).toBe(12)
     expect(mapped.isBookingsOpen).toBe(false)
   })

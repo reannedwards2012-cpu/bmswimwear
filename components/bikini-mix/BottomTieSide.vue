@@ -1,9 +1,12 @@
 <template>
-  <!-- Tie-side bottom, front view only — the main preview no longer shows a
-       back view (coverage is now illustrated separately via ArtTile in the
-       Bottom Coverage section). The front is the same piece regardless of
-       coverage; bows/strings are part of this same traced path, always
-       visible. Sized by WIDTH so the parent can balance it against the top. -->
+  <!-- Tie-side bottom. Front view is a single piece regardless of coverage
+       or scrunch (bows/strings are part of the same traced path, always
+       visible). Back view is selected by `view==='back'` and additionally
+       by `scrunch` — each a live-colored render of the matching traced
+       piece (reusing the existing non-scrunch back art outright; falling
+       back to an honest placeholder for any piece not yet supplied, per
+       data/bikiniMixArt.js). Sized by WIDTH so the parent can balance it
+       against the top. -->
   <button
     type="button"
     class="piece-btn grid place-items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-coral/70"
@@ -12,7 +15,8 @@
     aria-label="Edit bottom colour"
     @click="$emit('select')"
   >
-    <svg :width="width" :height="height" :viewBox="`0 0 ${piece.w} ${piece.h}`">
+    <BikiniMixArtPlaceholder v-if="piece.missing" :width="width" :height="height" :colour="colour" />
+    <svg v-else :width="width" :height="height" :viewBox="`0 0 ${piece.w} ${piece.h}`">
       <defs>
         <clipPath :id="clipId">
           <path :d="piece.d" :transform="piece.transform" />
@@ -46,13 +50,22 @@ const props = defineProps({
   colour: { type: String, required: true },
   imageUrl: { type: String, default: null },
   active: { type: Boolean, default: false },
-  width: { type: Number, default: 220 }
+  width: { type: Number, default: 220 },
+  view: { type: String, default: 'front' }, // 'front' | 'back'
+  coverage: { type: String, default: 'bikini' }, // 'bikini' | 'cheeky' — back view only
+  scrunch: { type: Boolean, default: false } // back view only
 })
 defineEmits(['select'])
 
-const piece = BIKINI_ART.tie_front
+const piece = computed(() => {
+  if (props.view !== 'back') return BIKINI_ART.tie_front
+  const key = props.scrunch
+    ? `tie_back_scrunch_${props.coverage === 'cheeky' ? 'cheeky' : 'bikini'}`
+    : `tie_back_${props.coverage === 'cheeky' ? 'cheeky' : 'bikini'}`
+  return BIKINI_ART[key]
+})
 const clipId = `bm-tie-clip-${Math.random().toString(36).slice(2)}`
-const height = computed(() => Math.round((piece.h / piece.w) * props.width))
+const height = computed(() => (piece.value.missing ? props.width : Math.round((piece.value.h / piece.value.w) * props.width)))
 </script>
 
 <style scoped>
@@ -68,4 +81,3 @@ const height = computed(() => Math.round((piece.h / piece.w) * props.width))
   filter: drop-shadow(0 0 3px rgba(230, 107, 69, 0.9)) drop-shadow(0 0 7px rgba(230, 107, 69, 0.45));
 }
 </style>
-

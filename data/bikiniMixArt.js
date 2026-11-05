@@ -3,6 +3,21 @@
 // aspect ratio when displaying — do not force a uniform box), `transform`
 // = potrace's own coordinate transform (kept verbatim, not hand-edited),
 // `d` = the traced path data.
+//
+// Entries marked `missing: true` have no real traced art yet — they are a
+// DEVELOPMENT-ONLY placeholder (see components/bikini-mix/*.vue's `missing`
+// checks and ArtPlaceholder.vue), never something a real customer should
+// see on the deployed site. They exist so every other part of the booking
+// flow (selections, validation, pricing, admin dashboard) is fully buildable
+// and testable without waiting on reference photos. The moment real art is
+// supplied, replace the entry below with the real `{w, h, transform, d}`
+// shape (traced via the same potrace pipeline as every other piece here) —
+// no other code changes are needed; every consuming component reads this
+// data file, never a hardcoded shape.
+//
+// See the implementation report for the exact reference photos requested:
+// one-piece front + 2 back views, 4 scrunch-back variants, 1 bikini-top
+// back view.
 export const BIKINI_ART = {
   tie_front: {
     w: 217.0, h: 158.0,
@@ -44,4 +59,53 @@ export const BIKINI_ART = {
     transform: "translate(0.000000,151.000000) scale(0.100000,-0.100000)",
     d: "M70 1457 c-27 -13 -69 -88 -70 -124 0 -31 61 -153 77 -153 18 0 16 8\n-17 69 -47 85 -39 92 37 32 79 -62 160 -198 218 -368 l28 -83 -60 -127 c-109\n-229 -201 -460 -239 -600 -2 -7 -13 -13 -24 -13 -30 0 -22 -32 10 -41 32 -9\n596 -9 710 -1 76 6 85 9 85 27 0 17 -8 21 -54 25 -60 6 -47 -15 -116 174 -60\n162 -169 396 -233 501 -14 21 -46 93 -73 158 -26 65 -67 153 -91 195 -40 71\n-138 183 -182 207 -17 10 -16 13 19 48 56 56 39 107 -25 74z"
   },
+
+  // ── Bikini top — back view. No reference art exists yet (the top has
+  // never had a back view at all, static or live) — see the implementation
+  // report's "Bikini top back view — 1 image" request. ──
+  top_left_back: { missing: true },
+  top_right_back: { missing: true },
+
+  // ── Scrunch bottoms — back view only (front is identical to the
+  // non-scrunch piece per the brief). Applies to both bottom styles. ──
+  tie_back_scrunch_bikini: { missing: true },
+  tie_back_scrunch_cheeky: { missing: true },
+  classic_back_scrunch_bikini: { missing: true },
+  classic_back_scrunch_cheeky: { missing: true },
+
+  // ── One-piece — entirely new shape family. Supplied as a real,
+  // hand-authored vector (public/images/bikini-mix/One piece front.svg) —
+  // the source file itself now carries explicit named groups
+  // (swimsuit-body / side-straps / shoulder-straps / front-keyhole) and a
+  // designer note: "Mirrored halves have no stroke to prevent center
+  // seam" — i.e. the body's two mirrored half-paths must never be given a
+  // stroke/outline of their own (see OnePiece.vue, which uses a CSS
+  // drop-shadow for edge legibility instead, since that traces the
+  // rendered silhouette's alpha rather than the path geometry and so
+  // cannot expose the internal seam). `transform` is '' — the path data
+  // is already in standard upright SVG coordinates, no flip/scale needed.
+  // Three layers:
+  //   `d`       — the body silhouette (two mirrored half-paths, meeting at
+  //               the hem): the ONLY part tinted to the selected fabric
+  //               colour/pattern.
+  //   `straps`  — shoulder straps + side ties, combined: always rendered
+  //               solid black, never tinted, regardless of body colour.
+  //   `cutout`  — the small teardrop keyhole at the chest: always white
+  //               (an open gap in the fabric), never tinted.
+  one_piece_front: {
+    w: 2980.65, h: 4859.56,
+    transform: '',
+    d:
+      'M1490.32,4581.68h282.37c-132.92-494.34,107.9-810.51,107.9-810.51,188.91-393.32,694.26-742.21,694.26-742.21-289.22-662.3-22.68-1545.54-22.68-1545.54-380.11-136.14-399.83-737.38-399.83-737.38h-54.98c-167.47,508.97-607,527.53-607,527.53 ' +
+      'M1490.32,4581.68h-282.37c132.92-494.34-107.9-810.51-107.9-810.51-188.91-393.32-694.26-742.21-694.26-742.21,289.22-662.3,22.68-1545.54,22.68-1545.54,380.11-136.14,399.83-737.38,399.83-737.38h54.98c167.47,508.97,607,527.53,607,527.53',
+    straps:
+      'M444.28,3058.35s-50.49,501.77,0,801.59c0,0,27.3,241.29-22.44,391.53l-36.42-23.1c49.74-150.25,22.44-391.53,22.44-391.53-50.49-299.82,0-801.59,0-801.59l38.85,24.89s7.87,504.24,92.69,796.21c0,0,55.02,236.51,22.99,391.5l-38.85-18.73c32.03-154.99-22.99-391.5-22.99-391.5-84.82-291.97-92.69-796.21-92.69-796.21Z ' +
+      'M2536.36,3056.66s50.49,501.77,0,801.59c0,0-27.3,241.29,22.44,391.53l36.42-23.1c-49.74-150.25-22.44-391.53-22.44-391.53,50.49-299.82,0-801.59,0-801.59l-38.85,24.89s-7.87,504.24-92.69,796.21c0,0-55.02,236.51-22.99,391.5l38.85-18.73c-32.03-154.99,22.99-391.5,22.99-391.5,84.82-291.97,92.69-796.21,92.69-796.21Z ' +
+      'M826.64,750.08l356.24-543.56c10.2-19.29,37.04-21.32,50.03-3.78l710.23,829.42-32.43,36.26-678.94-796.81c-8.4-11.46-25.91-10.15-32.5,2.43l-317.65,476.04h-54.98Z ' +
+      'M2150.67,750.08l-357.24-528.1c-9.74-18.42-35.36-20.35-47.76-3.61l-711.5,813.79,32.43,36.26,681.96-783.6c7-9.56,21.6-8.46,27.1,2.03l320.02,463.23h54.98Z',
+    cutout: 'M1452.25,1314.24s-195.28,305.34-153.19,489.32c0,0,40.09,135.33,189.6,129.02,0,0,137.82,15.38,189.6-129.02,0,0,53.08-148.35-150.04-489.32,0,0-42.19,5.69-75.97,0Z'
+  },
+  one_piece_back_bikini: { missing: true },
+  one_piece_back_cheeky: { missing: true }
 }
+

@@ -19,10 +19,9 @@ defineProps({
 })
 
 const STEPS = [
-  { n: 1, label: 'Invitation' },
+  { n: 1, label: 'Experience' },
   { n: 2, label: 'Build' },
   { n: 3, label: 'Details' },
-  { n: 4, label: 'Package' },
-  { n: 5, label: 'Review' }
+  { n: 4, label: 'Review' }
 ]
 </script>

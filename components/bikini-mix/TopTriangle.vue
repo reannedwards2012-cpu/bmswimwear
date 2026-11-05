@@ -3,7 +3,10 @@
        paths, traced from the original sketch. Sized by combined WIDTH (not
        height) so the parent can balance the top against the bottom's own
        width — each half still renders at its own traced aspect ratio,
-       never stretched. -->
+       never stretched. `view` selects front or back art per side; a side
+       whose back art hasn't been supplied yet (see data/bikiniMixArt.js)
+       falls back to an honest "coming soon" placeholder instead of
+       guessing a shape. -->
   <div class="flex items-end justify-center" :style="{ gap: gapPx + 'px' }">
     <button
       v-for="side in ['left', 'right']"
@@ -15,7 +18,8 @@
       :aria-label="side === 'left' ? 'Edit left triangle colour' : 'Edit right triangle colour'"
       @click="$emit('select', side)"
     >
-      <svg :width="perWidth" :height="perHeight" :viewBox="`0 0 ${art[side].w} ${art[side].h}`">
+      <BikiniMixArtPlaceholder v-if="art[side].missing" :width="perWidth" :height="perHeight" :colour="side === 'left' ? leftColour : rightColour" />
+      <svg v-else :width="perWidth" :height="perHeight" :viewBox="`0 0 ${art[side].w} ${art[side].h}`">
         <defs>
           <clipPath :id="`${clipIdBase}-${side}`">
             <path :d="art[side].d" :transform="art[side].transform" />
@@ -53,17 +57,28 @@ const props = defineProps({
   leftImageUrl: { type: String, default: null },
   rightImageUrl: { type: String, default: null },
   active: { type: String, default: null }, // 'left' | 'right' | null
-  groupWidth: { type: Number, default: 220 } // combined width of both triangles + gap
+  groupWidth: { type: Number, default: 220 }, // combined width of both triangles + gap
+  view: { type: String, default: 'front' } // 'front' | 'back'
 })
 defineEmits(['select'])
 
-const art = { left: BIKINI_ART.top_left, right: BIKINI_ART.top_right }
+const art = computed(() =>
+  props.view === 'back'
+    ? { left: BIKINI_ART.top_left_back, right: BIKINI_ART.top_right_back }
+    : { left: BIKINI_ART.top_left, right: BIKINI_ART.top_right }
+)
 const clipIdBase = `bm-top-clip-${Math.random().toString(36).slice(2)}`
 
 const gapPx = computed(() => Math.round(props.groupWidth * 0.045))
 const perWidth = computed(() => Math.round((props.groupWidth - gapPx.value) / 2))
-// both halves share essentially the same traced aspect ratio — average the two
-const aspect = computed(() => (art.left.w / art.left.h + art.right.w / art.right.h) / 2)
+// both halves share essentially the same traced aspect ratio — average the
+// two, falling back to a square-ish ratio when the art is a placeholder.
+const aspect = computed(() => {
+  const l = art.value.left
+  const r = art.value.right
+  if (l.missing || r.missing) return 1
+  return (l.w / l.h + r.w / r.h) / 2
+})
 const perHeight = computed(() => Math.round(perWidth.value / aspect.value))
 </script>
 
@@ -83,4 +98,3 @@ const perHeight = computed(() => Math.round(perWidth.value / aspect.value))
   filter: drop-shadow(0 0 3px rgba(230, 107, 69, 0.9)) drop-shadow(0 0 7px rgba(230, 107, 69, 0.45));
 }
 </style>
-

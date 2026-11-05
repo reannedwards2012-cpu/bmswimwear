@@ -13,14 +13,15 @@ const MAX = {
   name: 120,
   email: 200,
   phone: 40,
-  personalization: 60
+  caption: 200
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const PACKAGES = ['classic_mix', 'the_works']
+export const GARMENT_TYPES = ['bikini', 'onepiece']
 const BOTTOM_STYLES = ['tie-side', 'classic']
 const BOTTOM_COVERAGES = ['bikini', 'cheeky']
+const GALLERY_CATEGORIES = ['strap', 'bead', 'charm', 'rhinestone', 'iron_on', 'finished_swimsuit']
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '')
 const isEmpty = (v) => v === null || v === undefined || v === ''
@@ -36,6 +37,19 @@ function dateOrNull(v) {
   if (isEmpty(v)) return null
   const s = str(v)
   return Number.isNaN(Date.parse(s)) ? NaN : s
+}
+
+// Body measurements (Step 3 "Your Measurements") — optional, inches, one
+// decimal place. The range is a broad sanity bound, not a tight clinical
+// one: wide enough to never reject a real customer, tight enough to catch
+// obvious mistakes (0, negative, or a stray extra digit).
+const MEASUREMENT_MIN = 10
+const MEASUREMENT_MAX = 120
+function measurementOrNull(v) {
+  if (isEmpty(v)) return null
+  const n = typeof v === 'number' ? v : Number(v)
+  if (!Number.isFinite(n) || n <= 0) return NaN
+  return Math.round(n * 10) / 10
 }
 
 function validateInclusions(raw, label) {
@@ -135,8 +149,8 @@ export function validateEventFields(body, { partial = true } = {}) {
   }
 
   for (const [key, label] of [
-    ['classicMixPriceXcdCents', 'Classic Mix price'],
-    ['theWorksPriceXcdCents', 'The Works price']
+    ['regularPriceXcdCents', 'Regular ticket price'],
+    ['earlyBirdPriceXcdCents', 'Early Bird price']
   ]) {
     if (provided(key)) {
       const n = intOrNull(b[key])
@@ -144,16 +158,15 @@ export function validateEventFields(body, { partial = true } = {}) {
       out[key] = n
     }
   }
-
-  if (provided('classicMixInclusions')) {
-    const { issues: i, values } = validateInclusions(b.classicMixInclusions, 'Classic Mix inclusions')
-    issues.push(...i)
-    out.classicMixInclusions = values
+  if (provided('earlyBirdSlots')) {
+    const n = intOrNull(b.earlyBirdSlots)
+    if (n === null || Number.isNaN(n) || !Number.isInteger(n) || n <= 0) issues.push('Early Bird slot count must be a whole number greater than zero.')
+    out.earlyBirdSlots = n
   }
-  if (provided('theWorksInclusions')) {
-    const { issues: i, values } = validateInclusions(b.theWorksInclusions, 'The Works inclusions')
+  if (provided('ticketInclusions')) {
+    const { issues: i, values } = validateInclusions(b.ticketInclusions, 'Ticket inclusions')
     issues.push(...i)
-    out.theWorksInclusions = values
+    out.ticketInclusions = values
   }
 
   if (provided('promoVideoUrl')) {
@@ -197,10 +210,16 @@ export function validateBookingResolution(body) {
  * POST /api/bikini-mix/checkout — the customer booking/checkout payload.
  *
  * Shape only. Nothing here is trusted for MONEY, fabric names/hex or event
- * facts — the endpoint re-resolves retail_price_xcd_cents from the live
- * `bikini_mix_event` row and fabric names/hex from `fabrics` by id, exactly
- * like server/utils/checkoutOrder.js does for product orders. This function
- * only confirms the request is well-formed enough to act on.
+ * facts — the endpoint re-resolves everything price-related via the
+ * claim_bikini_mix_booking() RPC (which decides the early-bird reservation
+ * under the event-row lock) and fabric names/hex from `fabrics` by id. This
+ * function only confirms the request is well-formed enough to act on.
+ *
+ * `garmentType` determines which branch of fields is required — exactly
+ * one of the two branches, never a mix. One-piece bookings use a single
+ * fabric/colour (`onepieceFabricId`) and have no bottom-style/scrunch
+ * concept; bikini bookings are unchanged from before except for the new
+ * `bottomScrunch` flag.
  */
 export function validateBookingCheckout(body) {
   const issues = []
@@ -210,23 +229,60 @@ export function validateBookingCheckout(body) {
   if (!isUuid(b.checkoutIdempotencyKey)) issues.push('checkoutIdempotencyKey must be a UUID.')
   out.checkoutIdempotencyKey = isUuid(b.checkoutIdempotencyKey) ? b.checkoutIdempotencyKey : null
 
-  const pkg = str(b.package)
-  if (!PACKAGES.includes(pkg)) issues.push(`package must be one of: ${PACKAGES.join(', ')}.`)
-  out.package = pkg
+  const garmentType = str(b.garmentType)
+  if (!GARMENT_TYPES.includes(garmentType)) issues.push(`garmentType must be one of: ${GARMENT_TYPES.join(', ')}.`)
+  out.garmentType = garmentType
 
-  if (!SIZES.includes(str(b.topSize))) issues.push(`topSize must be one of: ${SIZES.join(', ')}.`)
-  out.topSize = str(b.topSize)
-  if (!SIZES.includes(str(b.bottomSize))) issues.push(`bottomSize must be one of: ${SIZES.join(', ')}.`)
-  out.bottomSize = str(b.bottomSize)
+  if (garmentType === 'bikini') {
+    if (!SIZES.includes(str(b.topSize))) issues.push(`topSize must be one of: ${SIZES.join(', ')}.`)
+    out.topSize = str(b.topSize)
+    if (!SIZES.includes(str(b.bottomSize))) issues.push(`bottomSize must be one of: ${SIZES.join(', ')}.`)
+    out.bottomSize = str(b.bottomSize)
 
-  if (!BOTTOM_STYLES.includes(str(b.bottomStyle))) issues.push(`bottomStyle must be one of: ${BOTTOM_STYLES.join(', ')}.`)
-  out.bottomStyle = str(b.bottomStyle)
-  if (!BOTTOM_COVERAGES.includes(str(b.bottomCoverage))) issues.push(`bottomCoverage must be one of: ${BOTTOM_COVERAGES.join(', ')}.`)
-  out.bottomCoverage = str(b.bottomCoverage)
+    if (!BOTTOM_STYLES.includes(str(b.bottomStyle))) issues.push(`bottomStyle must be one of: ${BOTTOM_STYLES.join(', ')}.`)
+    out.bottomStyle = str(b.bottomStyle)
+    if (!BOTTOM_COVERAGES.includes(str(b.bottomCoverage))) issues.push(`bottomCoverage must be one of: ${BOTTOM_COVERAGES.join(', ')}.`)
+    out.bottomCoverage = str(b.bottomCoverage)
 
-  for (const key of ['leftFabricId', 'rightFabricId', 'bottomFabricId']) {
-    if (!isUuid(b[key])) issues.push(`${key} must be a UUID.`)
-    out[key] = isUuid(b[key]) ? b[key] : null
+    out.bottomScrunch = b.bottomScrunch === true
+
+    for (const key of ['leftFabricId', 'rightFabricId', 'bottomFabricId']) {
+      if (!isUuid(b[key])) issues.push(`${key} must be a UUID.`)
+      out[key] = isUuid(b[key]) ? b[key] : null
+    }
+    out.onepieceSize = null
+    out.onepieceCoverage = null
+    out.onepieceFabricId = null
+  } else if (garmentType === 'onepiece') {
+    if (!SIZES.includes(str(b.onepieceSize))) issues.push(`onepieceSize must be one of: ${SIZES.join(', ')}.`)
+    out.onepieceSize = str(b.onepieceSize)
+    if (!BOTTOM_COVERAGES.includes(str(b.onepieceCoverage))) issues.push(`onepieceCoverage must be one of: ${BOTTOM_COVERAGES.join(', ')}.`)
+    out.onepieceCoverage = str(b.onepieceCoverage)
+    if (!isUuid(b.onepieceFabricId)) issues.push('onepieceFabricId must be a UUID.')
+    out.onepieceFabricId = isUuid(b.onepieceFabricId) ? b.onepieceFabricId : null
+
+    out.topSize = null
+    out.bottomSize = null
+    out.bottomStyle = null
+    out.bottomCoverage = null
+    out.bottomScrunch = false
+    out.leftFabricId = null
+    out.rightFabricId = null
+    out.bottomFabricId = null
+  } else {
+    // garmentType itself already failed validation above — still populate
+    // every key so downstream code never sees `undefined`.
+    out.topSize = null
+    out.bottomSize = null
+    out.bottomStyle = null
+    out.bottomCoverage = null
+    out.bottomScrunch = false
+    out.leftFabricId = null
+    out.rightFabricId = null
+    out.bottomFabricId = null
+    out.onepieceSize = null
+    out.onepieceCoverage = null
+    out.onepieceFabricId = null
   }
 
   const fullName = str(b.fullName)
@@ -247,14 +303,87 @@ export function validateBookingCheckout(body) {
   else if (whatsapp.length > MAX.phone) issues.push('Phone number is too long.')
   out.whatsapp = whatsapp
 
-  const personalizationName = isEmpty(b.personalizationName) ? '' : str(b.personalizationName)
-  if (pkg === 'the_works' && !personalizationName) issues.push('Personalization name is required for The Works.')
-  if (personalizationName.length > MAX.personalization) issues.push('Personalization name is too long.')
-  out.personalizationName = personalizationName || null
-
   out.marketingOptIn = b.marketingOptIn === true
 
   if (b.termsAccepted !== true) issues.push('You must agree to the cancellation and refund policy.')
+
+  // Measurements — every field optional; validated only when provided.
+  for (const [key, label] of [
+    ['bustInches', 'Bust'],
+    ['underbustInches', 'Underbust'],
+    ['waistInches', 'Waist'],
+    ['hipsInches', 'Hips']
+  ]) {
+    const n = measurementOrNull(b[key])
+    if (Number.isNaN(n) || (n != null && (n < MEASUREMENT_MIN || n > MEASUREMENT_MAX))) {
+      issues.push(`${label} must be a realistic measurement in inches (between ${MEASUREMENT_MIN} and ${MEASUREMENT_MAX}), or left blank.`)
+      out[key] = null
+    } else {
+      out[key] = n
+    }
+  }
+
+  return { issues, fields: out }
+}
+
+/**
+ * Admin writes to a bikini_mix_fabrics eligibility row — mirrors the
+ * existing is_active toggle, now with a second independent flag.
+ */
+export function validateFabricEligibilityFields(body, { partial = true } = {}) {
+  const issues = []
+  const b = body && typeof body === 'object' ? body : {}
+  const out = {}
+  const has = (k) => Object.prototype.hasOwnProperty.call(b, k)
+  const provided = (k) => !partial || has(k)
+
+  if (provided('isActive')) {
+    if (typeof b.isActive !== 'boolean') issues.push('isActive must be true or false.')
+    out.isActive = b.isActive
+  }
+  if (provided('eligibleForOnepiece')) {
+    if (typeof b.eligibleForOnepiece !== 'boolean') issues.push('eligibleForOnepiece must be true or false.')
+    out.eligibleForOnepiece = b.eligibleForOnepiece
+  }
+
+  return { issues, fields: out }
+}
+
+/** Admin writes to a bikini_mix_gallery_images row (create or update). */
+export function validateGalleryImageFields(body, { partial = false } = {}) {
+  const issues = []
+  const b = body && typeof body === 'object' ? body : {}
+  const out = {}
+  const has = (k) => Object.prototype.hasOwnProperty.call(b, k)
+  const provided = (k) => !partial || has(k)
+
+  if (provided('category')) {
+    const v = str(b.category)
+    if (!GALLERY_CATEGORIES.includes(v)) issues.push(`category must be one of: ${GALLERY_CATEGORIES.join(', ')}.`)
+    out.category = v
+  }
+  if (provided('caption')) {
+    const v = isEmpty(b.caption) ? null : str(b.caption)
+    if (v && v.length > MAX.caption) issues.push('Caption is too long.')
+    out.caption = v
+  }
+  if (has('includedInTicket')) {
+    if (typeof b.includedInTicket !== 'boolean') issues.push('includedInTicket must be true or false.')
+    out.includedInTicket = b.includedInTicket
+  } else if (!partial) {
+    out.includedInTicket = false
+  }
+  if (has('isActive')) {
+    if (typeof b.isActive !== 'boolean') issues.push('isActive must be true or false.')
+    out.isActive = b.isActive
+  } else if (!partial) {
+    out.isActive = true
+  }
+  if (provided('sortOrder')) {
+    const n = intOrNull(b.sortOrder)
+    if (n !== null && (Number.isNaN(n) || !Number.isInteger(n))) issues.push('sortOrder must be a whole number.')
+    out.sortOrder = n
+  }
 
   return { issues, fields: out }
 }

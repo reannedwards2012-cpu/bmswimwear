@@ -11,6 +11,7 @@
  */
 import { supabaseAdmin } from '../../utils/supabaseAdmin.js'
 import { BIKINI_MIX_FABRIC_SELECT, mapBikiniMixFabric } from '../../utils/bikiniMixMappers.js'
+import { isMigrationNotAppliedError } from '../../utils/bikiniMixMigrationGuard.js'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -22,10 +23,11 @@ export default defineEventHandler(async (event) => {
       .order('sort_order', { ascending: true, nullsFirst: false })
 
     if (error) {
-      // '42P01' = undefined_table, 'PGRST205' = PostgREST schema-cache miss
-      // — both mean the migration hasn't been applied yet, same as event.get.js.
-      const notConfigured = error.code === '42P01' || error.code === 'PGRST205'
-      if (notConfigured) {
+      // Covers both "table missing" (migration never run at all) and
+      // "column missing" (table exists from an earlier migration, but
+      // eligible_for_onepiece — added later — doesn't yet) — both mean
+      // "migration not applied", same as event.get.js.
+      if (isMigrationNotAppliedError(error)) {
         setResponseStatus(event, 503)
         return { configured: false }
       }
@@ -41,7 +43,8 @@ export default defineEventHandler(async (event) => {
         id: r.fabric.id,
         name: r.fabric.name,
         hexColor: r.fabric.hexColor,
-        imageUrl: r.fabric.imageUrl
+        imageUrl: r.fabric.imageUrl,
+        eligibleForOnepiece: r.eligibleForOnepiece
       }))
 
     return { configured: true, fabrics }

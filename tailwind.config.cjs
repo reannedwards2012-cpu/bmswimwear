@@ -35,7 +35,17 @@ module.exports = {
         terracotta: '#E66B45',
         gold: '#C1974A', // harmonised with the logo foil
         ink: '#5A4035', // PRIMARY — body text and dark sections
-        brand: '#E66B45' // back-compat alias for any legacy `bg-brand`
+        brand: '#E66B45', // back-compat alias for any legacy `bg-brand`
+        // Scoped palette for The Swimsuit Mixer booking flow only — an
+        // airier, more editorial ivory/blush variant of the brand kit above.
+        // Additive: nothing outside components/bikini-mix/** and the
+        // swimsuit-mixer pages references these, so no other page changes.
+        mixer: {
+          ivory: '#FAF7F2',
+          blush: '#F6E6E5',
+          coral: '#D98278',
+          ink: '#493A36'
+        }
       },
       fontFamily: {
         // Brand fonts (Seasons / Garet / Brittany) are commercial and not on

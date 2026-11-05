@@ -176,6 +176,8 @@ export function buildBookingView(row, eventRow) {
     fullName: mapped.fullName,
     email: mapped.email,
     package: mapped.package,
+    garmentType: mapped.garmentType,
+    earlyBirdApplied: mapped.earlyBirdApplied,
     retailPriceXcdCents: mapped.retailPriceXcdCents,
     chargedUsdCents: mapped.chargedUsdCents,
     topSize: mapped.topSize,
@@ -185,9 +187,13 @@ export function buildBookingView(row, eventRow) {
     bottomFabricName: mapped.bottomFabricName,
     bottomStyle: mapped.bottomStyle,
     bottomCoverage: mapped.bottomCoverage,
+    bottomScrunch: mapped.bottomScrunch,
+    onepieceSize: mapped.onepieceSize,
+    onepieceCoverage: mapped.onepieceCoverage,
+    onepieceFabricName: mapped.onepieceFabricName,
     personalizationName: mapped.personalizationName,
     status: row.status,
-    eventName: eventRow?.event_name || 'The Bikini Mixer',
+    eventName: eventRow?.event_name || 'The Swimsuit Mixer',
     eventDate: eventRow?.event_date || null,
     venue: eventRow?.venue || null
   }

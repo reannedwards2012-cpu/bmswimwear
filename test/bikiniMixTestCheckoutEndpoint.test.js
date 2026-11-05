@@ -40,23 +40,22 @@ const FAB_BOTTOM = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
 
 const VALID_BODY = {
   checkoutIdempotencyKey: '11111111-1111-1111-1111-111111111111',
-  package: 'the_works',
+  garmentType: 'bikini',
   topSize: 'M',
   bottomSize: 'M',
   bottomStyle: 'tie-side',
   bottomCoverage: 'bikini',
+  bottomScrunch: false,
   leftFabricId: FAB_LEFT,
   rightFabricId: FAB_RIGHT,
   bottomFabricId: FAB_BOTTOM,
   fullName: 'Admin Tester',
   email: 'admin@example.com',
   whatsapp: '+1 473 555 1234',
-  personalizationName: 'Admin',
   marketingOptIn: false,
   termsAccepted: true
 }
 
-const EVENT_ROW = { classic_mix_price_xcd_cents: 16000, the_works_price_xcd_cents: 20000 }
 const FABRIC_ROWS = [
   { id: FAB_LEFT, name: 'Sunset Coral', hex_color: '#E66B45', is_active: true, status: 'available' },
   { id: FAB_RIGHT, name: 'Sunset Coral', hex_color: '#E66B45', is_active: true, status: 'available' },
@@ -67,8 +66,9 @@ function freshTestBookingRow(overrides = {}) {
   return {
     id: 'bkg-test-1',
     booking_number: 99,
-    package: 'the_works',
-    retail_price_xcd_cents: 20000,
+    package: 'ticket',
+    early_bird_quoted: true,
+    retail_price_xcd_cents: 22500,
     charged_usd_cents: null,
     go2pay_request_id: null,
     go2pay_payment_url: null,
@@ -86,9 +86,6 @@ function fakeSupabase({ rpcResult, updateResults = [] }) {
   return {
     rpc: vi.fn().mockResolvedValue(rpcResult),
     from(table) {
-      if (table === 'bikini_mix_event') {
-        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: EVENT_ROW, error: null }) }) }) }
-      }
       if (table === 'fabrics') {
         return { select: () => ({ in: () => Promise.resolve({ data: FABRIC_ROWS, error: null }) }) }
       }
@@ -163,7 +160,7 @@ describe('POST /api/admin/bikini-mix/test-checkout', () => {
     requireAdmin.mockResolvedValue({ id: 'admin-1' })
     createPaymentRequest.mockResolvedValue({ id: 'req-test', payment_url: 'https://go2pay.gd/pay/req-test' })
     const supabase = fakeSupabase({
-      rpcResult: { data: freshTestBookingRow(), error: null }, // retail_price_xcd_cents: 20000 (The Works)
+      rpcResult: { data: freshTestBookingRow(), error: null }, // retail_price_xcd_cents: 22500 (Early Bird)
       updateResults: [
         { data: [{ id: 'bkg-test-1' }], error: null },
         { data: [{ id: 'bkg-test-1' }], error: null }
@@ -174,7 +171,7 @@ describe('POST /api/admin/bikini-mix/test-checkout', () => {
     await handler(event(VALID_BODY))
 
     const sentAmount = createPaymentRequest.mock.calls[0][0].amount
-    expect(sentAmount).toBeCloseTo(TEST_CHARGE_USD_CENTS / 100, 2) // $1.00 — NOT $74.07 (what The Works would derive to)
+    expect(sentAmount).toBeCloseTo(TEST_CHARGE_USD_CENTS / 100, 2) // $1.00 — NOT $83.33 (what Early Bird would derive to)
   })
 
   it('labels the Go2Pay request and description as a test', async () => {

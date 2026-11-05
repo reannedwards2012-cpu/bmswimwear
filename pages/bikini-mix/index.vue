@@ -1,6 +1,8 @@
 <template>
-  <div class="relative min-h-screen bg-sand">
-    <BikiniMixDecor />
+  <div class="relative min-h-screen overflow-hidden bg-mixer-ivory">
+    <!-- one subtle, shared blush wash — replaces the busier decorative
+         overlay this page used to carry; visible across all four steps -->
+    <div class="pointer-events-none absolute -right-32 -top-40 -z-0 h-96 w-96 rounded-full bg-mixer-blush opacity-50 blur-3xl" aria-hidden="true" />
 
     <div class="relative z-10">
       <p v-if="testMode" class="bg-coral py-2 text-center text-[0.7rem] font-semibold uppercase tracking-widest2 text-cream">
@@ -15,7 +17,7 @@
       <div v-else-if="loadError || !event" class="mx-auto max-w-md rounded-3xl bg-cream p-8 text-center shadow-card">
         <p class="font-display text-lg font-semibold text-ink">We couldn't load this page</p>
         <p class="mt-2 text-sm text-ink/60">
-          Something went wrong fetching the latest Bikini Mixer details. Please check your connection and try again.
+          Something went wrong fetching the latest Swimsuit Mixer details. Please check your connection and try again.
         </p>
         <button type="button" class="btn-primary mt-5" @click="retryLoad">Try again</button>
       </div>
@@ -31,9 +33,14 @@
             :booking-deadline="event.bookingDeadline"
             :is-bookings-open="event.isBookingsOpen"
             :promo-video-url="event.promoVideoUrl"
-            :classic-mix-price-xcd-cents="event.classicMixPriceXcdCents"
-            :the-works-price-xcd-cents="event.theWorksPriceXcdCents"
+            :regular-price-xcd-cents="event.regularPriceXcdCents"
+            :early-bird-price-xcd-cents="event.earlyBirdPriceXcdCents"
+            :early-bird-slots="event.earlyBirdSlots"
+            :early-bird-remaining="event.earlyBirdRemaining"
+            :early-bird-available="event.earlyBirdAvailable"
+            :ticket-inclusions="event.ticketInclusions"
             @continue="goTo(2)"
+            @open-gallery="galleryOpen = true"
           />
 
           <!-- Admin-only test-mode entry point. Only ever rendered after a
@@ -48,10 +55,23 @@
         </template>
 
         <template v-else-if="currentStep === 2">
-          <BikiniMixCustomerStepBuild v-model="build" :fabrics="fabrics" :bottom-size-guide="event.bottomSizeGuide" />
+          <BikiniMixCustomerStepBuild
+            v-model="build"
+            :fabrics="fabrics"
+            :bottom-size-guide="event.bottomSizeGuide"
+            @set-garment-type="setGarmentType"
+            @open-gallery="galleryOpen = true"
+          />
           <div class="mx-auto mt-10 flex max-w-3xl items-center justify-between">
             <button type="button" class="btn-outline" @click="goTo(1)">← Back</button>
-            <button type="button" class="btn-primary" @click="goTo(3)">Continue</button>
+            <button
+              type="button"
+              class="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="!buildComplete"
+              @click="goTo(3)"
+            >
+              Continue
+            </button>
           </div>
         </template>
 
@@ -70,63 +90,41 @@
           </div>
         </template>
 
-        <template v-else-if="currentStep === 4">
-          <BikiniMixCustomerStepPackage
-            v-model="selectedPackage"
-            :classic-mix-price-xcd-cents="event.classicMixPriceXcdCents"
-            :classic-mix-inclusions="event.classicMixInclusions"
-            :the-works-price-xcd-cents="event.theWorksPriceXcdCents"
-            :the-works-inclusions="event.theWorksInclusions"
-            :personalization-name="personalizationName"
-            @update:personalization-name="personalizationName = $event"
-          />
-          <div class="mx-auto mt-10 flex max-w-3xl items-center justify-between">
-            <button type="button" class="btn-outline" @click="goTo(3)">← Back</button>
-            <button
-              type="button"
-              class="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
-              :disabled="!packageComplete"
-              @click="goTo(5)"
-            >
-              Continue
-            </button>
-          </div>
-        </template>
-
         <template v-else>
           <BikiniMixCustomerStepReview
             :build="build"
             :details="details"
             :fabrics="fabrics"
-            :selected-package="selectedPackage"
-            :classic-mix-price-xcd-cents="event.classicMixPriceXcdCents"
-            :the-works-price-xcd-cents="event.theWorksPriceXcdCents"
-            :personalization-name="personalizationName"
+            :regular-price-xcd-cents="event.regularPriceXcdCents"
+            :early-bird-price-xcd-cents="event.earlyBirdPriceXcdCents"
+            :early-bird-available="event.earlyBirdAvailable"
+            :ticket-inclusions="event.ticketInclusions"
             :policy-accepted="policyAccepted"
             :marketing-opt-in="marketingOptIn"
             :test-mode="testMode"
             @update:policy-accepted="policyAccepted = $event"
           />
           <div class="mx-auto mt-6 flex max-w-2xl items-center justify-start">
-            <button type="button" class="btn-outline" @click="goTo(4)">← Back</button>
+            <button type="button" class="btn-outline" @click="goTo(3)">← Back</button>
           </div>
         </template>
       </template>
       </div>
     </div>
+
+    <BikiniMixCustomerCustomizationGallery v-model="galleryOpen" />
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { isValidEmail, isValidPhone } from '~/utils/validate'
+import { isValidEmail, isValidPhone, isValidMeasurement } from '~/utils/validate'
 
-useHead({ title: 'The Bikini Mixer — Bahama Mama Swimwear' })
+useHead({ title: 'The Swimsuit Mixer — Bahama Mama Swimwear' })
 
 const { event, pending: eventPending, error: eventError, refresh: refreshEvent } = await useBikiniMixEvent()
 const { fabrics, pending: fabricsPending, error: fabricsError, refresh: refreshFabrics } = await useBikiniMixFabrics()
-const { currentStep, build, details, selectedPackage, personalizationName, policyAccepted, marketingOptIn } =
-  useBikiniMixBooking()
+const { currentStep, build, details, marketingOptIn, policyAccepted, setGarmentType } = useBikiniMixBooking()
 
 // No mock fallback for either fetch — a failure on either one blocks the
 // whole flow behind the error state in the template (real event + real
@@ -144,6 +142,8 @@ function goTo(step) {
   currentStep.value = step
   if (import.meta.client) window.scrollTo({ top: 0, behavior: 'smooth' })
 }
+
+const galleryOpen = ref(false)
 
 // ── Admin-only test mode ──────────────────────────────────────────────────
 // isAdminTester is set ONLY by a successful call to a real requireAdmin()
@@ -170,13 +170,25 @@ function enterTestMode() {
   goTo(2)
 }
 
-const detailsComplete = computed(
-  () => Boolean(details.value.fullName.trim()) && isValidEmail(details.value.email) && isValidPhone(details.value.whatsapp)
-)
-
-const packageComplete = computed(() => {
-  if (!selectedPackage.value) return false
-  if (selectedPackage.value === 'the_works') return Boolean(personalizationName.value.trim())
-  return true
+const buildComplete = computed(() => {
+  const b = build.value
+  if (b.garmentType === 'bikini') {
+    return Boolean(b.topSize && b.bottomSize && b.leftFabricId && b.rightFabricId && b.bottomFabricId && b.bottomStyle && b.bottomCoverage)
+  }
+  if (b.garmentType === 'onepiece') {
+    return Boolean(b.onepieceSize && b.onepieceCoverage && b.onepieceFabricId)
+  }
+  return false
 })
+
+const detailsComplete = computed(
+  () =>
+    Boolean(details.value.fullName.trim()) &&
+    isValidEmail(details.value.email) &&
+    isValidPhone(details.value.whatsapp) &&
+    isValidMeasurement(details.value.bust) &&
+    isValidMeasurement(details.value.underbust) &&
+    isValidMeasurement(details.value.waist) &&
+    isValidMeasurement(details.value.hips)
+)
 </script>

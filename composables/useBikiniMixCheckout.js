@@ -1,19 +1,22 @@
 /**
- * Client-held checkout id for a Bikini Mixer booking — mirrors
+ * Client-held checkout id for a Swimsuit Mixer booking — mirrors
  * composables/useCheckout.js's fingerprint/sessionStorage pattern.
  *
- * The id regenerates whenever anything that changes the authoritative
- * payable amount or the booking itself changes (package, bikini selections,
- * guest details), so a Go2Pay Payment Request minted for one combination can
+ * The id regenerates whenever anything that changes the booking itself
+ * changes (garment type, bikini or one-piece selections, scrunch, guest
+ * details), so a Go2Pay Payment Request minted for one combination can
  * never be reused to charge another. Reused as-is (same id) across retries
  * of the same combination, which is what makes server/api/bikini-mix/
- * checkout.post.js's claim idempotent on repeat submits.
+ * checkout.post.js's claim idempotent on repeat submits. The payable
+ * amount itself is never part of the fingerprint — it's decided entirely
+ * server-side (regular vs. early-bird), never something the client could
+ * influence by including/excluding it here.
  */
-const STORE_KEY = 'bm-bikini-mix-checkout'
+const STORE_KEY = 'bm-swimsuit-mixer-checkout'
 
-function fingerprint(build, selectedPackage, personalizationName, details) {
+function fingerprint(build, details) {
   return [
-    selectedPackage || '',
+    build.garmentType || '',
     build.topSize,
     build.leftFabricId,
     build.rightFabricId,
@@ -21,7 +24,10 @@ function fingerprint(build, selectedPackage, personalizationName, details) {
     build.bottomCoverage,
     build.bottomSize,
     build.bottomFabricId,
-    personalizationName || '',
+    build.bottomScrunch ? '1' : '0',
+    build.onepieceSize,
+    build.onepieceCoverage,
+    build.onepieceFabricId,
     details.fullName,
     details.email,
     details.whatsapp
@@ -38,8 +44,8 @@ function readStore() {
 }
 
 export function useBikiniMixCheckout() {
-  function checkoutId(build, selectedPackage, personalizationName, details) {
-    const fp = fingerprint(build, selectedPackage, personalizationName, details)
+  function checkoutId(build, details) {
+    const fp = fingerprint(build, details)
     const stored = readStore()
     if (stored?.id && stored.fp === fp) return stored.id
 

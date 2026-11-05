@@ -12,14 +12,23 @@
         <!-- preview — the focal point: large, above controls on mobile, pinned left on desktop -->
         <div class="flex flex-col items-center gap-4 lg:sticky lg:top-8 lg:w-[21rem] lg:shrink-0">
           <BikiniMixPreview
+            :garment-type="garmentType"
             :left-colour="leftHex"
             :right-colour="rightHex"
             :bottom-style="bottomStyle"
             :bottom-colour="bottomHex"
+            :bottom-coverage="bottomCoverage"
+            :bottom-scrunch="bottomScrunch"
+            :onepiece-colour="bottomHex"
             :active-component="activeComponent"
             :preview-width="300"
             @select-component="activeComponent = $event"
           />
+          <div class="flex gap-2">
+            <button type="button" class="rounded-full border px-3 py-1 text-xs" :class="garmentType === 'bikini' ? 'border-ink bg-ink text-cream' : 'border-ink/15'" @click="garmentType = 'bikini'">Bikini</button>
+            <button type="button" class="rounded-full border px-3 py-1 text-xs" :class="garmentType === 'onepiece' ? 'border-ink bg-ink text-cream' : 'border-ink/15'" @click="garmentType = 'onepiece'">One-Piece</button>
+            <button type="button" class="rounded-full border px-3 py-1 text-xs" :class="bottomScrunch ? 'border-ink bg-ink text-cream' : 'border-ink/15'" @click="bottomScrunch = !bottomScrunch">Scrunch: {{ bottomScrunch ? 'On' : 'Off' }}</button>
+          </div>
 
           <div class="w-full rounded-3xl bg-cream/70 p-4 text-xs text-ink/60">
             <p class="font-semibold uppercase tracking-widest2 text-ink/40">Your combination</p>
@@ -279,6 +288,8 @@ function matchAll() {
 
 const bottomStyle = ref('tie-side') // 'tie-side' | 'classic'
 const bottomCoverage = ref('bikini') // 'bikini' | 'cheeky'
+const bottomScrunch = ref(false)
+const garmentType = ref('bikini') // 'bikini' | 'onepiece' — dev-only toggle for testing the redesign
 
 const bottomStyleLabel = computed(() => (bottomStyle.value === 'tie-side' ? 'Tie-Side' : 'Classic'))
 const bottomCoverageLabel = computed(() => (bottomCoverage.value === 'cheeky' ? 'Cheeky' : 'Bikini'))

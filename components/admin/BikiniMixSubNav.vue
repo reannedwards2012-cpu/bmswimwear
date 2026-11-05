@@ -19,6 +19,7 @@ const route = useRoute()
 const TABS = [
   { label: 'Event Settings', to: '/admin/bikini-mix', exact: true },
   { label: 'Fabrics', to: '/admin/bikini-mix/fabrics' },
+  { label: 'Gallery', to: '/admin/bikini-mix/gallery' },
   { label: 'Bookings', to: '/admin/bikini-mix/bookings' },
   { label: 'Production Summary', to: '/admin/bikini-mix/production' }
 ]

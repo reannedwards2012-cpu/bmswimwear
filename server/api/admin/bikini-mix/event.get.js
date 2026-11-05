@@ -7,6 +7,7 @@
 import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../utils/authUser.js'
 import { EVENT_SELECT, mapEvent } from '../../../utils/bikiniMixMappers.js'
+import { isMigrationNotAppliedError } from '../../../utils/bikiniMixMigrationGuard.js'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event) // throws 401 / 403
@@ -16,6 +17,10 @@ export default defineEventHandler(async (event) => {
     const { data, error } = await supabase.from('bikini_mix_event').select(EVENT_SELECT).eq('id', 'default').maybeSingle()
 
     if (error) {
+      if (isMigrationNotAppliedError(error)) {
+        setResponseStatus(event, 503)
+        return { configured: false, error: 'Swimsuit Mixer migration not applied yet.' }
+      }
       console.error('[admin/bikini-mix/event] load failed:', error.message)
       setResponseStatus(event, 500)
       return { error: 'Could not load event settings.' }

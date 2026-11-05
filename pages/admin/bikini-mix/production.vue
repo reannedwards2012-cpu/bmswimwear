@@ -1,6 +1,6 @@
 <template>
   <div>
-    <FancyHeading eyebrow="Admin" title="Bikini *Mix*" size="sm" as="h1" />
+    <FancyHeading eyebrow="Admin" title="Swimsuit *Mixer*" size="sm" as="h1" />
     <AdminBikiniMixSubNav class="mt-6" />
 
     <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
@@ -14,9 +14,15 @@
     </div>
     <p v-if="exportError" class="mt-2 text-sm text-coral">{{ exportError }}</p>
 
+    <div v-if="previewMode" class="mt-4 rounded-2xl bg-coral/10 px-4 py-3 text-sm text-ink/70">
+      🔧 <strong>Preview mode</strong> — the Swimsuit Mixer database migration hasn't been applied yet, so this page
+      is showing a production summary derived from local mock bookings. The "Prepared" checklist is fully
+      interactive (updates in memory only); CSV export still requires the real database.
+    </div>
+
     <p v-if="pending && !data" class="mt-8 rounded-4xl bg-cream p-7 text-sm text-ink/50 shadow-card">Loading…</p>
 
-    <div v-else-if="loadError" class="mt-8 rounded-4xl bg-cream p-7 text-center shadow-card">
+    <div v-else-if="loadError && !previewMode" class="mt-8 rounded-4xl bg-cream p-7 text-center shadow-card">
       <p class="text-sm text-coral">Couldn’t load the production summary.</p>
       <button type="button" class="btn-outline mt-4" @click="refresh">Try again</button>
     </div>
@@ -28,7 +34,7 @@
         <p class="text-sm text-ink/70">No confirmed bookings yet.</p>
       </div>
 
-      <div v-else class="mt-6 grid gap-6 lg:grid-cols-3">
+      <div v-else class="mt-6 grid gap-6 lg:grid-cols-4">
         <section class="rounded-4xl bg-cream p-6 shadow-card">
           <h2 class="font-display text-base font-semibold text-ink">Left Triangles</h2>
           <ul class="mt-3 space-y-2 text-sm">
@@ -48,13 +54,23 @@
           </ul>
         </section>
         <section class="rounded-4xl bg-cream p-6 shadow-card">
-          <h2 class="font-display text-base font-semibold text-ink">Bottoms</h2>
+          <h2 class="font-display text-base font-semibold text-ink">Bikini Bottoms</h2>
           <ul class="mt-3 space-y-2 text-sm">
             <li v-for="(row, i) in data.bottoms" :key="i" class="flex items-center justify-between gap-2">
-              <span class="text-ink/70">{{ row.style }}, {{ row.coverage }}, size {{ row.size }}, {{ row.colour }}</span>
+              <span class="text-ink/70">{{ row.style }}, {{ row.coverage }}, {{ row.scrunch }}, size {{ row.size }}, {{ row.colour }}</span>
               <span class="shrink-0 font-semibold text-ink">{{ row.count }}</span>
             </li>
           </ul>
+        </section>
+        <section class="rounded-4xl bg-cream p-6 shadow-card">
+          <h2 class="font-display text-base font-semibold text-ink">One-Pieces</h2>
+          <ul v-if="data.onePieces?.length" class="mt-3 space-y-2 text-sm">
+            <li v-for="(row, i) in data.onePieces" :key="i" class="flex items-center justify-between gap-2">
+              <span class="text-ink/70">{{ row.coverage }}, size {{ row.size }}, {{ row.colour }}</span>
+              <span class="shrink-0 font-semibold text-ink">{{ row.count }}</span>
+            </li>
+          </ul>
+          <p v-else class="mt-3 text-sm text-ink/45">None yet.</p>
         </section>
       </div>
 
@@ -76,7 +92,7 @@
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p class="font-semibold text-ink">{{ row.bookingNumber }} — {{ row.fullName }}</p>
-                <p class="text-xs text-ink/50">{{ row.package }}</p>
+                <p class="text-xs text-ink/50">{{ row.garmentType === 'onepiece' ? 'One-Piece' : 'Bikini' }} · {{ row.ticketTier }}</p>
               </div>
               <label class="flex shrink-0 cursor-pointer items-center gap-2 text-xs font-semibold text-ink/60">
                 <input
@@ -90,13 +106,18 @@
               </label>
             </div>
 
-            <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+            <dl v-if="row.garmentType === 'onepiece'" class="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+              <div><dt class="text-[0.65rem] uppercase tracking-widest2 text-ink/40">Size</dt><dd class="text-ink">{{ row.onepieceSize }}</dd></div>
+              <div><dt class="text-[0.65rem] uppercase tracking-widest2 text-ink/40">Coverage</dt><dd class="text-ink">{{ row.onepieceCoverage }}</dd></div>
+              <div><dt class="text-[0.65rem] uppercase tracking-widest2 text-ink/40">Fabric</dt><dd class="text-ink">{{ row.onepieceFabricName }}</dd></div>
+            </dl>
+            <dl v-else class="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
               <div><dt class="text-[0.65rem] uppercase tracking-widest2 text-ink/40">Top size</dt><dd class="text-ink">{{ row.topSize }}</dd></div>
               <div><dt class="text-[0.65rem] uppercase tracking-widest2 text-ink/40">Left triangle</dt><dd class="text-ink">{{ row.leftFabricName }}</dd></div>
               <div><dt class="text-[0.65rem] uppercase tracking-widest2 text-ink/40">Right triangle</dt><dd class="text-ink">{{ row.rightFabricName }}</dd></div>
               <div><dt class="text-[0.65rem] uppercase tracking-widest2 text-ink/40">Bottom size</dt><dd class="text-ink">{{ row.bottomSize }}</dd></div>
               <div><dt class="text-[0.65rem] uppercase tracking-widest2 text-ink/40">Bottom fabric</dt><dd class="text-ink">{{ row.bottomFabricName }}</dd></div>
-              <div><dt class="text-[0.65rem] uppercase tracking-widest2 text-ink/40">Style / Coverage</dt><dd class="text-ink">{{ row.bottomStyle }}, {{ row.bottomCoverage }}</dd></div>
+              <div><dt class="text-[0.65rem] uppercase tracking-widest2 text-ink/40">Style / Coverage</dt><dd class="text-ink">{{ row.bottomStyle }}, {{ row.bottomCoverage }}{{ row.bottomScrunch ? ', scrunch' : '' }}</dd></div>
             </dl>
             <p v-if="prepareError[row.id]" class="mt-2 text-xs text-coral">{{ prepareError[row.id] }}</p>
           </section>
@@ -107,10 +128,11 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
+import { mockProductionSummary } from '~/data/bikiniMixAdminMock.js'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
-useHead({ title: 'Bikini Mix Production — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
+useHead({ title: 'Swimsuit Mixer Production — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
 
 const { getAccessToken } = useAuth()
 async function authedFetch(url, opts = {}) {
@@ -118,11 +140,22 @@ async function authedFetch(url, opts = {}) {
   return $fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: token ? `Bearer ${token}` : '' } })
 }
 
+function isNotConfigured(err) {
+  return err?.statusCode === 503 || err?.data?.configured === false
+}
+const previewMode = ref(false)
+
 const { data, pending, error: loadError, refresh } = useLazyAsyncData(
   'bikini-mix-production',
   () => authedFetch('/api/admin/bikini-mix/production-summary'),
   { server: false }
 )
+watch(loadError, (err) => {
+  if (err && isNotConfigured(err)) {
+    previewMode.value = true
+    data.value = mockProductionSummary()
+  }
+})
 
 // ── CSV export ───────────────────────────────────────────────────────────
 const exporting = ref(false)
@@ -130,6 +163,10 @@ const exportError = ref('')
 
 async function exportCsv() {
   if (exporting.value) return
+  if (previewMode.value) {
+    exportError.value = 'CSV export requires the real database — not available in preview mode.'
+    return
+  }
   exporting.value = true
   exportError.value = ''
   try {
@@ -142,7 +179,7 @@ async function exportCsv() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `bikini-mix-bookings-${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `swimsuit-mixer-bookings-${new Date().toISOString().slice(0, 10)}.csv`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -163,6 +200,15 @@ async function togglePrepared(row, checked) {
   prepareError[row.id] = ''
   const previous = row.basePreparedAt
   row.basePreparedAt = checked ? new Date().toISOString() : null // optimistic
+
+  // Preview mode: base_prepared_at predates this migration and would
+  // normally still work, but there's no real booking row behind this mock
+  // id to PATCH — keep the optimistic local update as the final state.
+  if (previewMode.value) {
+    togglingId.value = null
+    return
+  }
+
   try {
     const res = await authedFetch(`/api/admin/bikini-mix/bookings/${row.id}/prepared`, {
       method: 'PATCH',

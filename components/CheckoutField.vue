@@ -21,7 +21,11 @@
       :value="modelValue"
       :required="required"
       :autocomplete="autocomplete"
-      :inputmode="type === 'tel' ? 'tel' : undefined"
+      :inputmode="type === 'tel' ? 'tel' : type === 'number' ? 'decimal' : undefined"
+      :step="type === 'number' ? step : undefined"
+      :min="type === 'number' ? min : undefined"
+      :max="type === 'number' ? max : undefined"
+      :placeholder="placeholder"
       :aria-invalid="error ? 'true' : undefined"
       :class="fieldClass"
       @input="$emit('update:modelValue', $event.target.value)"
@@ -37,12 +41,17 @@ import { computed } from 'vue'
 const props = defineProps({
   label: { type: String, required: true },
   modelValue: { type: String, default: '' },
-  type: { type: String, default: 'text' }, // text | email | tel | textarea
+  type: { type: String, default: 'text' }, // text | email | tel | number | textarea
   autocomplete: { type: String, default: undefined },
   required: { type: Boolean, default: false },
   optional: { type: Boolean, default: false },
   error: { type: String, default: '' },
-  rows: { type: [String, Number], default: 4 }
+  rows: { type: [String, Number], default: 4 },
+  // number-only
+  step: { type: [String, Number], default: 'any' },
+  min: { type: [String, Number], default: undefined },
+  max: { type: [String, Number], default: undefined },
+  placeholder: { type: String, default: undefined }
 })
 
 defineEmits(['update:modelValue'])

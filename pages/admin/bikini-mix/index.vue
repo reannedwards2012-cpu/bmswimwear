@@ -1,16 +1,22 @@
 <template>
   <div>
     <div class="flex flex-wrap items-center justify-between gap-4">
-      <FancyHeading eyebrow="Admin" title="Bikini *Mix*" size="sm" as="h1" />
+      <FancyHeading eyebrow="Admin" title="Swimsuit *Mixer*" size="sm" as="h1" />
     </div>
 
     <AdminBikiniMixSubNav class="mt-6" />
 
     <p v-if="savedMessage" class="mt-4 rounded-2xl bg-shell/60 px-4 py-3 text-sm text-ink/70">{{ savedMessage }}</p>
 
+    <div v-if="previewMode" class="mt-4 rounded-2xl bg-coral/10 px-4 py-3 text-sm text-ink/70">
+      🔧 <strong>Preview mode</strong> — the Swimsuit Mixer database migration hasn't been applied yet, so this page is
+      showing local mock data instead of a load error. Every control here is fully interactive, but "Save" only
+      updates this mock data in memory (nothing is written to the database).
+    </div>
+
     <p v-if="pending && !data" class="mt-8 rounded-4xl bg-cream p-7 text-sm text-ink/50 shadow-card">Loading event settings…</p>
 
-    <div v-else-if="loadError" class="mt-8 rounded-4xl bg-cream p-7 text-center shadow-card">
+    <div v-else-if="loadError && !previewMode" class="mt-8 rounded-4xl bg-cream p-7 text-center shadow-card">
       <p class="text-sm text-coral">Couldn’t load event settings.</p>
       <button type="button" class="btn-outline mt-4" @click="refresh">Try again</button>
     </div>
@@ -83,13 +89,46 @@
         </div>
       </section>
 
-      <!-- packages -->
+      <!-- ticket pricing & early bird -->
       <section class="rounded-4xl bg-cream p-6 shadow-card md:p-7">
-        <h2 class="font-display text-lg font-semibold text-ink">Packages</h2>
-        <div class="mt-5 grid gap-6 lg:grid-cols-2">
-          <AdminBikiniMixPackageEditor label="Classic Mix" v-model:price="form.classicMixPriceXcdCents" v-model:inclusions="form.classicMixInclusions" />
-          <AdminBikiniMixPackageEditor label="The Works" v-model:price="form.theWorksPriceXcdCents" v-model:inclusions="form.theWorksInclusions" />
+        <h2 class="font-display text-lg font-semibold text-ink">Ticket Pricing</h2>
+        <div class="mt-4 grid gap-4 sm:grid-cols-3">
+          <label class="block">
+            <span class="lbl">Regular price (EC$)</span>
+            <input v-model="form.regularPriceXcdCents" type="number" min="0" step="0.01" class="inp" />
+          </label>
+          <label class="block">
+            <span class="lbl">Early Bird price (EC$)</span>
+            <input v-model="form.earlyBirdPriceXcdCents" type="number" min="0" step="0.01" class="inp" />
+          </label>
+          <label class="block">
+            <span class="lbl">Early Bird slots</span>
+            <input v-model="form.earlyBirdSlots" type="number" min="1" step="1" class="inp" />
+          </label>
         </div>
+
+        <div class="mt-5">
+          <span class="lbl">Ticket inclusions</span>
+          <p class="mt-1 text-xs text-ink/45">
+            Keep this general until exact bead/charm/strap/rhinestone counts are finalized — never promise specific
+            quantities or "unlimited" materials here.
+          </p>
+          <ul class="mt-2 space-y-1.5">
+            <li v-for="(line, i) in form.ticketInclusions" :key="i" class="flex items-center gap-2 text-sm text-ink/70">
+              <span class="flex-1 rounded-xl bg-shell/60 px-3 py-1.5">{{ line }}</span>
+              <button type="button" class="text-ink/35 hover:text-coral" @click="form.ticketInclusions.splice(i, 1)">✕</button>
+            </li>
+          </ul>
+          <div class="mt-2 flex gap-2">
+            <input v-model.trim="inclusionDraft" type="text" placeholder="e.g. Access to the event" class="inp flex-1 !mt-0" @keydown.enter.prevent="addInclusion" />
+            <button type="button" class="btn-outline px-4 py-1.5 text-xs" @click="addInclusion">Add</button>
+          </div>
+        </div>
+
+        <p v-if="earlyBirdStatus" class="mt-5 text-xs text-ink/55">
+          {{ earlyBirdStatus.applied }} of {{ form.earlyBirdSlots }} Early Bird tickets claimed so far.
+          <span v-if="earlyBirdStatus.mismatches"> {{ earlyBirdStatus.mismatches }} honored right at the cutoff — see the bookings list.</span>
+        </p>
       </section>
 
       <!-- size guide -->
@@ -186,9 +225,10 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { mockEvent, mockBookings } from '~/data/bikiniMixAdminMock.js'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
-useHead({ title: 'Bikini Mix — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
+useHead({ title: 'Swimsuit Mixer — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
 
 const { getAccessToken } = useAuth()
 async function authedFetch(url, opts = {}) {
@@ -196,9 +236,48 @@ async function authedFetch(url, opts = {}) {
   return $fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: token ? `Bearer ${token}` : '' } })
 }
 
+// A 503 with configured:false means the Swimsuit Mixer migration hasn't
+// been applied to this database yet (see server/utils/
+// bikiniMixMigrationGuard.js) — every admin section falls back to local
+// mock data in that case, rather than a dead-end "couldn't load" screen.
+function isNotConfigured(err) {
+  return err?.statusCode === 503 || err?.data?.configured === false
+}
+
+const previewMode = ref(false)
+
 const { data, pending, error: loadError, refresh } = useLazyAsyncData('bikini-mix-event', () => authedFetch('/api/admin/bikini-mix/event'), {
   server: false
 })
+watch(loadError, (err) => {
+  if (err && isNotConfigured(err)) {
+    previewMode.value = true
+    data.value = { event: mockEvent() }
+  }
+})
+
+const earlyBirdStatus = ref(null)
+authedFetch('/api/admin/bikini-mix/bookings')
+  .then((res) => {
+    earlyBirdStatus.value = res.earlyBird
+  })
+  .catch((err) => {
+    if (isNotConfigured(err)) {
+      const bookings = mockBookings()
+      earlyBirdStatus.value = {
+        applied: bookings.filter((b) => b.status === 'confirmed' && !b.isTest && b.earlyBirdApplied).length,
+        mismatches: bookings.filter((b) => b.earlyBirdMismatch).length
+      }
+    }
+  })
+
+const inclusionDraft = ref('')
+function addInclusion() {
+  const v = inclusionDraft.value.trim()
+  if (!v || !form.value) return
+  form.value.ticketInclusions.push(v)
+  inclusionDraft.value = ''
+}
 
 const centsToInput = (c) => (typeof c === 'number' ? (c / 100).toFixed(2) : '')
 
@@ -215,10 +294,10 @@ function fromEvent(e) {
     holdMinutes: e.holdMinutes ?? 15,
     isBookingsOpen: e.isBookingsOpen ?? false,
     promoVideoUrl: e.promoVideoUrl ?? '',
-    classicMixPriceXcdCents: centsToInput(e.classicMixPriceXcdCents),
-    classicMixInclusions: [...(e.classicMixInclusions ?? [])],
-    theWorksPriceXcdCents: centsToInput(e.theWorksPriceXcdCents),
-    theWorksInclusions: [...(e.theWorksInclusions ?? [])],
+    regularPriceXcdCents: centsToInput(e.regularPriceXcdCents),
+    earlyBirdPriceXcdCents: centsToInput(e.earlyBirdPriceXcdCents),
+    earlyBirdSlots: e.earlyBirdSlots ?? 3,
+    ticketInclusions: [...(e.ticketInclusions ?? [])],
     topSizeGuide: (e.topSizeGuide ?? []).map((r) => ({ ...r })),
     bottomSizeGuide: (e.bottomSizeGuide ?? []).map((r) => ({ ...r }))
   }
@@ -284,6 +363,18 @@ async function onSave() {
   formError.value = ''
   formIssues.value = []
 
+  // Preview mode: nothing exists to PATCH (the columns aren't there yet) —
+  // just keep the in-memory form as the new "saved" state, so the UI still
+  // demonstrates a real save round-trip.
+  if (previewMode.value) {
+    data.value = { event: { ...data.value.event, ...fromEvent(form.value) } }
+    clearTimeout(savedTimer)
+    savedMessage.value = 'Saved (preview only — not persisted).'
+    savedTimer = setTimeout(() => (savedMessage.value = ''), 3000)
+    saving.value = false
+    return
+  }
+
   const payload = {
     eventName: form.value.eventName,
     eventDate: form.value.eventDate || null,
@@ -296,10 +387,10 @@ async function onSave() {
     holdMinutes: form.value.holdMinutes === '' ? undefined : Number(form.value.holdMinutes),
     isBookingsOpen: form.value.isBookingsOpen,
     promoVideoUrl: form.value.promoVideoUrl || null,
-    classicMixPriceXcdCents: toCentsOrNull(form.value.classicMixPriceXcdCents),
-    classicMixInclusions: form.value.classicMixInclusions,
-    theWorksPriceXcdCents: toCentsOrNull(form.value.theWorksPriceXcdCents),
-    theWorksInclusions: form.value.theWorksInclusions,
+    regularPriceXcdCents: toCentsOrNull(form.value.regularPriceXcdCents),
+    earlyBirdPriceXcdCents: toCentsOrNull(form.value.earlyBirdPriceXcdCents),
+    earlyBirdSlots: form.value.earlyBirdSlots === '' ? undefined : Number(form.value.earlyBirdSlots),
+    ticketInclusions: form.value.ticketInclusions,
     topSizeGuide: form.value.topSizeGuide,
     bottomSizeGuide: form.value.bottomSizeGuide
   }

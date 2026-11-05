@@ -8,6 +8,7 @@
  */
 import { supabaseAdmin } from '../../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../../utils/authUser.js'
+import { isMigrationNotAppliedError } from '../../../../utils/bikiniMixMigrationGuard.js'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event) // throws 401 / 403
@@ -21,10 +22,14 @@ export default defineEventHandler(async (event) => {
         .select('id, name, slug, type, hex_color, image_url, status, is_active')
         .eq('is_active', true)
         .order('name', { ascending: true }),
-      supabase.from('bikini_mix_fabrics').select('fabric_id, is_active, sort_order')
+      supabase.from('bikini_mix_fabrics').select('fabric_id, is_active, eligible_for_onepiece, sort_order')
     ])
 
     if (fabricError || linkError) {
+      if (isMigrationNotAppliedError(fabricError) || isMigrationNotAppliedError(linkError)) {
+        setResponseStatus(event, 503)
+        return { configured: false, error: 'Swimsuit Mixer migration not applied yet.' }
+      }
       console.error('[admin/bikini-mix/fabrics] query failed:', fabricError?.message || linkError?.message)
       setResponseStatus(event, 500)
       return { error: 'Could not load fabrics.' }
@@ -42,7 +47,8 @@ export default defineEventHandler(async (event) => {
         hexColor: f.hex_color,
         imageUrl: f.image_url,
         status: f.status,
-        bikiniMixActive: link?.is_active ?? false
+        bikiniMixActive: link?.is_active ?? false,
+        eligibleForOnepiece: link?.eligible_for_onepiece ?? false
       }
     })
 

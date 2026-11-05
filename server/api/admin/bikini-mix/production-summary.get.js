@@ -22,6 +22,7 @@
 import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../utils/authUser.js'
 import { formatBookingNumber } from '../../../utils/bikiniMixMappers.js'
+import { isMigrationNotAppliedError } from '../../../utils/bikiniMixMigrationGuard.js'
 
 function groupCount(rows, keyFn) {
   const totals = new Map()
@@ -42,41 +43,58 @@ export default defineEventHandler(async (event) => {
     const { data, error } = await supabase
       .from('bikini_mix_bookings')
       .select(
-        'id, booking_number, full_name, package, top_size, left_fabric_name_snapshot, right_fabric_name_snapshot, bottom_style, bottom_coverage, bottom_size, bottom_fabric_name_snapshot, base_prepared_at'
+        'id, booking_number, full_name, package, garment_type, bottom_scrunch, top_size, left_fabric_name_snapshot, right_fabric_name_snapshot, bottom_style, bottom_coverage, bottom_size, bottom_fabric_name_snapshot, onepiece_size, onepiece_coverage, onepiece_fabric_name_snapshot, early_bird_applied, base_prepared_at'
       )
       .eq('status', 'confirmed')
       .eq('is_test', false)
       .order('created_at', { ascending: true })
 
     if (error) {
+      if (isMigrationNotAppliedError(error)) {
+        setResponseStatus(event, 503)
+        return { configured: false, error: 'Swimsuit Mixer migration not applied yet.' }
+      }
       console.error('[admin/bikini-mix/production-summary] query failed:', error.message)
       setResponseStatus(event, 500)
       return { error: 'Could not load production summary.' }
     }
 
     const rows = data ?? []
+    const bikiniRows = rows.filter((r) => r.garment_type !== 'onepiece')
+    const onepieceRows = rows.filter((r) => r.garment_type === 'onepiece')
 
-    const leftTriangles = groupCount(rows, (r) => ({ colour: r.left_fabric_name_snapshot, size: r.top_size }))
-    const rightTriangles = groupCount(rows, (r) => ({ colour: r.right_fabric_name_snapshot, size: r.top_size }))
-    const bottoms = groupCount(rows, (r) => ({
+    const leftTriangles = groupCount(bikiniRows, (r) => ({ colour: r.left_fabric_name_snapshot, size: r.top_size }))
+    const rightTriangles = groupCount(bikiniRows, (r) => ({ colour: r.right_fabric_name_snapshot, size: r.top_size }))
+    const bottoms = groupCount(bikiniRows, (r) => ({
       style: r.bottom_style === 'tie-side' ? 'Tie-Side' : 'Classic',
       coverage: r.bottom_coverage === 'cheeky' ? 'Cheeky' : 'Bikini',
+      scrunch: r.bottom_scrunch ? 'Scrunch' : 'No scrunch',
       size: r.bottom_size,
       colour: r.bottom_fabric_name_snapshot
+    }))
+    const onePieces = groupCount(onepieceRows, (r) => ({
+      coverage: r.onepiece_coverage === 'cheeky' ? 'Cheeky' : 'Bikini',
+      size: r.onepiece_size,
+      colour: r.onepiece_fabric_name_snapshot
     }))
 
     const bookings = rows.map((r) => ({
       id: r.id,
       bookingNumber: formatBookingNumber(r.booking_number),
       fullName: r.full_name,
-      package: r.package === 'the_works' ? 'The Works' : 'Classic Mix',
+      garmentType: r.garment_type,
+      ticketTier: r.package === 'ticket' ? (r.early_bird_applied ? 'Early Bird' : 'Regular') : r.package === 'the_works' ? 'The Works (legacy)' : 'Classic Mix (legacy)',
       topSize: r.top_size,
       leftFabricName: r.left_fabric_name_snapshot,
       rightFabricName: r.right_fabric_name_snapshot,
       bottomStyle: r.bottom_style === 'tie-side' ? 'Tie-Side' : 'Classic',
       bottomCoverage: r.bottom_coverage === 'cheeky' ? 'Cheeky' : 'Bikini',
+      bottomScrunch: r.bottom_scrunch === true,
       bottomSize: r.bottom_size,
       bottomFabricName: r.bottom_fabric_name_snapshot,
+      onepieceSize: r.onepiece_size,
+      onepieceCoverage: r.onepiece_coverage === 'cheeky' ? 'Cheeky' : 'Bikini',
+      onepieceFabricName: r.onepiece_fabric_name_snapshot,
       basePreparedAt: r.base_prepared_at
     }))
 
@@ -85,6 +103,7 @@ export default defineEventHandler(async (event) => {
       leftTriangles,
       rightTriangles,
       bottoms,
+      onePieces,
       bookings
     }
   } catch (err) {

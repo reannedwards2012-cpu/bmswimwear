@@ -144,17 +144,34 @@ describe('PATCH /api/admin/bikini-mix/fabrics/:fabricId', () => {
     requireAdmin.mockResolvedValue({ id: 'admin-1' })
     const supabase = makeTrackedSupabase({
       fabrics: () => ({ data: { id: FABRIC_ID }, error: null }),
-      bikini_mix_fabrics: () => ({ error: null })
+      bikini_mix_fabrics: () => ({ data: { is_active: true, eligible_for_onepiece: false }, error: null })
     })
     supabaseAdmin.mockReturnValue(supabase)
     const handler = await loadHandler()
 
     const res = await handler(event({ isActive: true }, { fabricId: FABRIC_ID }))
-    expect(res).toEqual({ fabricId: FABRIC_ID, isActive: true })
+    expect(res).toEqual({ fabricId: FABRIC_ID, isActive: true, eligibleForOnepiece: false })
 
     const upsertCall = supabase._calls.find((c) => c.table === 'bikini_mix_fabrics' && c.op === 'upsert')
     expect(upsertCall.payload).toMatchObject({ fabric_id: FABRIC_ID, is_active: true, __onConflict: 'fabric_id' })
     expect(supabase._calls.some((c) => c.table === 'fabrics' && c.op === 'update')).toBe(false)
+  })
+
+  it('can toggle eligibleForOnepiece independently of isActive', async () => {
+    requireAdmin.mockResolvedValue({ id: 'admin-1' })
+    const supabase = makeTrackedSupabase({
+      fabrics: () => ({ data: { id: FABRIC_ID }, error: null }),
+      bikini_mix_fabrics: () => ({ data: { is_active: true, eligible_for_onepiece: true }, error: null })
+    })
+    supabaseAdmin.mockReturnValue(supabase)
+    const handler = await loadHandler()
+
+    const res = await handler(event({ eligibleForOnepiece: true }, { fabricId: FABRIC_ID }))
+    expect(res.eligibleForOnepiece).toBe(true)
+
+    const upsertCall = supabase._calls.find((c) => c.table === 'bikini_mix_fabrics' && c.op === 'upsert')
+    expect(upsertCall.payload).toMatchObject({ fabric_id: FABRIC_ID, eligible_for_onepiece: true })
+    expect(upsertCall.payload.is_active).toBeUndefined()
   })
 })
 
@@ -284,8 +301,8 @@ describe('GET /api/admin/bikini-mix/production-summary', () => {
     expect(res.confirmedCount).toBe(5)
     expect(res.leftTriangles).toContainEqual({ colour: 'Pink', size: 'M', count: 3 })
     expect(res.leftTriangles).toContainEqual({ colour: 'Yellow', size: 'S', count: 2 })
-    expect(res.bottoms).toContainEqual({ style: 'Classic', coverage: 'Bikini', size: 'L', colour: 'Pink', count: 3 })
-    expect(res.bottoms).toContainEqual({ style: 'Tie-Side', coverage: 'Cheeky', size: 'M', colour: 'Red', count: 2 })
+    expect(res.bottoms).toContainEqual({ style: 'Classic', coverage: 'Bikini', scrunch: 'No scrunch', size: 'L', colour: 'Pink', count: 3 })
+    expect(res.bottoms).toContainEqual({ style: 'Tie-Side', coverage: 'Cheeky', scrunch: 'No scrunch', size: 'M', colour: 'Red', count: 2 })
   })
 
   it('also returns a per-guest checklist row (the grouped totals above stay unchanged)', async () => {
@@ -296,6 +313,8 @@ describe('GET /api/admin/bikini-mix/production-summary', () => {
         booking_number: 7,
         full_name: 'Jane Guest',
         package: 'the_works',
+        garment_type: 'bikini',
+        bottom_scrunch: false,
         top_size: 'M',
         left_fabric_name_snapshot: 'Teal',
         right_fabric_name_snapshot: 'Coral',
@@ -303,6 +322,10 @@ describe('GET /api/admin/bikini-mix/production-summary', () => {
         bottom_coverage: 'cheeky',
         bottom_size: 'S',
         bottom_fabric_name_snapshot: 'Ivory',
+        onepiece_size: null,
+        onepiece_coverage: null,
+        onepiece_fabric_name_snapshot: null,
+        early_bird_applied: false,
         base_prepared_at: null
       }
     ]
@@ -317,14 +340,19 @@ describe('GET /api/admin/bikini-mix/production-summary', () => {
         id: 'b-1',
         bookingNumber: 'BKM-000007',
         fullName: 'Jane Guest',
-        package: 'The Works',
+        garmentType: 'bikini',
+        ticketTier: 'The Works (legacy)',
         topSize: 'M',
         leftFabricName: 'Teal',
         rightFabricName: 'Coral',
         bottomStyle: 'Tie-Side',
         bottomCoverage: 'Cheeky',
+        bottomScrunch: false,
         bottomSize: 'S',
         bottomFabricName: 'Ivory',
+        onepieceSize: null,
+        onepieceCoverage: 'Bikini',
+        onepieceFabricName: null,
         basePreparedAt: null
       }
     ])
@@ -506,7 +534,8 @@ describe('GET /api/admin/bikini-mix/bookings/export', () => {
         'Customer Name',
         'Email',
         'WhatsApp',
-        'Package',
+        'Ticket Tier',
+        'Garment Type',
         'Top Size',
         'Left Triangle Fabric',
         'Right Triangle Fabric',
@@ -514,7 +543,15 @@ describe('GET /api/admin/bikini-mix/bookings/export', () => {
         'Bottom Fabric',
         'Bottom Style',
         'Coverage',
+        'Scrunch',
+        'One-piece Size',
+        'One-piece Coverage',
+        'One-piece Fabric',
         'Personalization Name',
+        'Bust (in)',
+        'Underbust (in)',
+        'Waist (in)',
+        'Hips (in)',
         'Amount Paid (USD)',
         'Booking Date'
       ].join(',')
@@ -530,6 +567,8 @@ describe('GET /api/admin/bikini-mix/bookings/export', () => {
         email: 'jane@example.com',
         whatsapp: '+1 473 555 1234',
         package: 'the_works',
+        garment_type: 'bikini',
+        early_bird_applied: false,
         top_size: 'M',
         left_fabric_name_snapshot: 'Teal',
         right_fabric_name_snapshot: 'Coral',
@@ -537,7 +576,15 @@ describe('GET /api/admin/bikini-mix/bookings/export', () => {
         bottom_fabric_name_snapshot: 'Ivory',
         bottom_style: 'tie-side',
         bottom_coverage: 'cheeky',
+        bottom_scrunch: false,
+        onepiece_size: null,
+        onepiece_coverage: null,
+        onepiece_fabric_name_snapshot: null,
         personalization_name: 'Jane',
+        bust_inches: 34.5,
+        underbust_inches: null,
+        waist_inches: 28,
+        hips_inches: null,
         charged_usd_cents: 7407,
         created_at: '2026-10-19T14:32:00.000Z'
       }
@@ -550,9 +597,10 @@ describe('GET /api/admin/bikini-mix/bookings/export', () => {
     const dataLine = csv.split('\r\n')[1]
 
     expect(dataLine).toBe(
-      ['BKM-000003', 'Jane Guest', 'jane@example.com', '+1 473 555 1234', 'The Works', 'M', 'Teal', 'Coral', 'S', 'Ivory', 'Tie-Side', 'Cheeky', 'Jane', '74.07', '2026-10-19'].join(
-        ','
-      )
+      [
+        'BKM-000003', 'Jane Guest', 'jane@example.com', '+1 473 555 1234', 'The Works (legacy)', 'Bikini', 'M', 'Teal', 'Coral', 'S', 'Ivory', 'Tie-Side', 'Cheeky', 'No', '', '', '',
+        'Jane', '34.5', '', '28', '', '74.07', '2026-10-19'
+      ].join(',')
     )
   })
 
@@ -595,6 +643,6 @@ describe('GET /api/admin/bikini-mix/bookings/export', () => {
     await handler(ev)
 
     expect(ev._headers['Content-Type']).toMatch(/text\/csv/)
-    expect(ev._headers['Content-Disposition']).toMatch(/attachment; filename="bikini-mix-bookings-.*\.csv"/)
+    expect(ev._headers['Content-Disposition']).toMatch(/attachment; filename="swimsuit-mixer-bookings-.*\.csv"/)
   })
 })

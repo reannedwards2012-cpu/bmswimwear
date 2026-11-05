@@ -9,6 +9,7 @@ import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../utils/authUser.js'
 import { validateEventFields } from '../../../utils/bikiniMixValidation.js'
 import { EVENT_SELECT, mapEvent } from '../../../utils/bikiniMixMappers.js'
+import { isMigrationNotAppliedError } from '../../../utils/bikiniMixMigrationGuard.js'
 
 const COLUMN_BY_FIELD = {
   eventName: 'event_name',
@@ -21,10 +22,10 @@ const COLUMN_BY_FIELD = {
   capacity: 'capacity',
   isBookingsOpen: 'is_bookings_open',
   promoVideoUrl: 'promo_video_url',
-  classicMixPriceXcdCents: 'classic_mix_price_xcd_cents',
-  classicMixInclusions: 'classic_mix_inclusions',
-  theWorksPriceXcdCents: 'the_works_price_xcd_cents',
-  theWorksInclusions: 'the_works_inclusions',
+  regularPriceXcdCents: 'regular_price_xcd_cents',
+  earlyBirdPriceXcdCents: 'early_bird_price_xcd_cents',
+  earlyBirdSlots: 'early_bird_slots',
+  ticketInclusions: 'ticket_inclusions',
   holdMinutes: 'hold_minutes',
   topSizeGuide: 'top_size_guide',
   bottomSizeGuide: 'bottom_size_guide'
@@ -59,6 +60,10 @@ export default defineEventHandler(async (event) => {
       .maybeSingle()
 
     if (error) {
+      if (isMigrationNotAppliedError(error)) {
+        setResponseStatus(event, 503)
+        return { configured: false, error: 'Swimsuit Mixer migration not applied yet — changes cannot be saved.' }
+      }
       console.error('[admin/bikini-mix/event] update failed:', error.message)
       setResponseStatus(event, 500)
       return { error: 'Could not update event settings.' }

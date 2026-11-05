@@ -1,52 +1,95 @@
 /**
- * Cross-step booking state for the customer-facing /bikini-mix flow.
- * A Nuxt useState singleton so selections survive navigating between steps
- * (and a refresh, within the same tab).
+ * Cross-step booking state for the customer-facing /bikini-mix flow (The
+ * Swimsuit Mixer). A Nuxt useState singleton so selections survive
+ * navigating between steps (and a refresh, within the same tab).
  *
- * Step order: 1 Invitation, 2 Build Your Bikini, 3 Your Details,
- * 4 Choose Your Package, 5 Review & Pay.
+ * Step order: 1 Experience, 2 Build Your Swimsuit, 3 Your Details,
+ * 4 Review & Pay. There is no longer a separate "package" step — a single
+ * ticket type has nothing to choose; its price/inclusions are shown on
+ * step 4 instead.
  */
 function defaultBuild() {
   return {
+    garmentType: null, // 'bikini' | 'onepiece' — null until Build step's first choice
+    // bikini-only:
     topSize: 'M',
-    bottomSize: 'M',
     leftFabricId: null,
     rightFabricId: null,
-    bottomFabricId: null,
     bottomStyle: 'tie-side', // 'tie-side' | 'classic'
-    bottomCoverage: 'bikini' // 'bikini' | 'cheeky'
+    bottomSize: 'M',
+    bottomCoverage: 'bikini', // 'bikini' | 'cheeky'
+    bottomScrunch: false,
+    bottomFabricId: null,
+    // onepiece-only:
+    onepieceSize: 'M',
+    onepieceCoverage: 'bikini', // 'bikini' | 'cheeky'
+    onepieceFabricId: null
   }
+}
+
+const BIKINI_ONLY_DEFAULTS = {
+  topSize: 'M',
+  leftFabricId: null,
+  rightFabricId: null,
+  bottomStyle: 'tie-side',
+  bottomSize: 'M',
+  bottomCoverage: 'bikini',
+  bottomScrunch: false,
+  bottomFabricId: null
+}
+
+const ONEPIECE_ONLY_DEFAULTS = {
+  onepieceSize: 'M',
+  onepieceCoverage: 'bikini',
+  onepieceFabricId: null
 }
 
 function defaultDetails() {
   return {
     fullName: '',
     email: '',
-    whatsapp: ''
+    whatsapp: '',
+    // Body measurements (Step 3 "Your Measurements") — all optional, kept
+    // as strings like every other form field here and converted to
+    // numbers/null only at checkout submission time.
+    bust: '',
+    underbust: '',
+    waist: '',
+    hips: ''
   }
 }
 
 export function useBikiniMixBooking() {
-  const currentStep = useState('bikini-mix-step', () => 1)
-  const build = useState('bikini-mix-build', defaultBuild)
-  const details = useState('bikini-mix-details', defaultDetails)
-  const selectedPackage = useState('bikini-mix-package', () => null) // 'classic_mix' | 'the_works' | null
-  const personalizationName = useState('bikini-mix-personalization', () => '')
-  const marketingOptIn = useState('bikini-mix-marketing-opt-in', () => false)
-  const policyAccepted = useState('bikini-mix-policy-accepted', () => false)
+  const currentStep = useState('swimsuit-mixer-step', () => 1)
+  const build = useState('swimsuit-mixer-build', defaultBuild)
+  const details = useState('swimsuit-mixer-details', defaultDetails)
+  const marketingOptIn = useState('swimsuit-mixer-marketing-opt-in', () => false)
+  const policyAccepted = useState('swimsuit-mixer-policy-accepted', () => false)
 
-  function selectPackage(pkg) {
-    selectedPackage.value = pkg
+  /**
+   * Switching garment type clears ONLY the branch being left, back to its
+   * defaults — and leaves the branch being entered untouched, so re-
+   * entering a branch preserves whatever was previously chosen there.
+   * Satisfies both "clear incompatible selections when switching" and
+   * "preserve valid selections when navigating backward" at once. A
+   * reselect of the already-active type is a no-op (never clears anything).
+   */
+  function setGarmentType(type) {
+    if (build.value.garmentType === type) return
+    if (build.value.garmentType === 'bikini') {
+      Object.assign(build.value, BIKINI_ONLY_DEFAULTS)
+    } else if (build.value.garmentType === 'onepiece') {
+      Object.assign(build.value, ONEPIECE_ONLY_DEFAULTS)
+    }
+    build.value.garmentType = type
   }
 
   return {
     currentStep,
     build,
     details,
-    selectedPackage,
-    personalizationName,
     marketingOptIn,
     policyAccepted,
-    selectPackage
+    setGarmentType
   }
 }

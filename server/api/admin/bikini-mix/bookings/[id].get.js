@@ -7,6 +7,7 @@
 import { supabaseAdmin } from '../../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../../utils/authUser.js'
 import { BOOKING_DETAIL_SELECT, mapBookingDetail } from '../../../../utils/bikiniMixMappers.js'
+import { isMigrationNotAppliedError } from '../../../../utils/bikiniMixMigrationGuard.js'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -28,6 +29,10 @@ export default defineEventHandler(async (event) => {
       .maybeSingle()
 
     if (error) {
+      if (isMigrationNotAppliedError(error)) {
+        setResponseStatus(event, 503)
+        return { configured: false, error: 'Swimsuit Mixer migration not applied yet.' }
+      }
       console.error('[admin/bikini-mix/bookings] detail failed:', error.message)
       setResponseStatus(event, 500)
       return { error: 'Could not load booking.' }

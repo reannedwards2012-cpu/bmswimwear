@@ -8,8 +8,6 @@ import { TEST_CHARGE_USD_CENTS, TEST_BOOKING_NAME_PREFIX } from '../../../utils/
 const GENERIC_ERROR = "We couldn't start the test booking right now. Please try again."
 const PAYMENT_INIT_ERROR = "We couldn't start test payment right now. Please try again in a moment."
 
-const PACKAGE_LABEL = { classic_mix: 'Classic Mix', the_works: 'The Works' }
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 async function updateWithRetry(build) {
@@ -29,21 +27,16 @@ async function updateWithRetry(build) {
  * Admin-only mirror of POST /api/bikini-mix/checkout — see
  * server/utils/bikiniMixTestMode.js for the full design. The only
  * differences from the real endpoint:
- *   - requireAdmin() gates the whole request (throws 401/403 otherwise —
- *     the real public endpoint has no such gate and never will).
+ *   - requireAdmin() gates the whole request.
  *   - Calls claim_bikini_mix_booking_test() instead of
  *     claim_bikini_mix_booking(), which bypasses only is_bookings_open /
- *     booking_deadline — every other check (capacity, idempotency,
- *     package validity) is identical.
+ *     booking_deadline — capacity AND early-bird reservation logic are
+ *     identical, both already filtering `not is_test`.
  *   - The amount actually charged to Go2Pay is the fixed
- *     TEST_CHARGE_USD_CENTS, never the real event price — retail_price_xcd_cents
- *     is still the real package price, purely for realistic display on the
- *     review screen and in the confirmation email.
- *   - Go2Pay request name/description are prefixed "[TEST]" so it's
- *     unmistakable in the Go2Pay dashboard too.
- * Payment verification itself (the callback + server/utils/bikiniMixPayments.js)
- * is completely unchanged and unaware this is a test — a test booking's
- * payment is verified exactly as rigorously as a real one.
+ *     TEST_CHARGE_USD_CENTS, never the real early-bird/regular price —
+ *     retail_price_xcd_cents is still the real reserved price, purely for
+ *     realistic display on the review screen and in the confirmation email.
+ *   - Go2Pay request name/description are prefixed "[TEST]".
  */
 export default defineEventHandler(async (event) => {
   await requireAdmin(event) // throws 401 / 403
@@ -58,23 +51,16 @@ export default defineEventHandler(async (event) => {
   try {
     const supabase = supabaseAdmin()
 
-    const [{ data: eventRow, error: eventErr }, { data: fabricRows, error: fabricErr }] = await Promise.all([
-      supabase
-        .from('bikini_mix_event')
-        .select('classic_mix_price_xcd_cents, the_works_price_xcd_cents')
-        .eq('id', 'default')
-        .maybeSingle(),
-      supabase
-        .from('fabrics')
-        .select('id, name, hex_color, is_active, status')
-        .in('id', [fields.leftFabricId, fields.rightFabricId, fields.bottomFabricId])
-    ])
+    const isBikini = fields.garmentType === 'bikini'
+    const fabricIds = isBikini
+      ? [fields.leftFabricId, fields.rightFabricId, fields.bottomFabricId]
+      : [fields.onepieceFabricId]
 
-    if (eventErr || !eventRow) {
-      console.error('[bikini-mix test-checkout] event lookup failed:', eventErr?.message || 'not found')
-      setResponseStatus(event, 500)
-      return { success: false, error: GENERIC_ERROR }
-    }
+    const { data: fabricRows, error: fabricErr } = await supabase
+      .from('fabrics')
+      .select('id, name, hex_color, is_active, status')
+      .in('id', fabricIds)
+
     if (fabricErr) {
       console.error('[bikini-mix test-checkout] fabric lookup failed:', fabricErr.message)
       setResponseStatus(event, 500)
@@ -82,39 +68,66 @@ export default defineEventHandler(async (event) => {
     }
 
     const fabricById = new Map((fabricRows ?? []).map((f) => [f.id, f]))
-    const left = fabricById.get(fields.leftFabricId)
-    const right = fabricById.get(fields.rightFabricId)
-    const bottom = fabricById.get(fields.bottomFabricId)
     const fabricOk = (f) => f && f.is_active && f.status !== 'unavailable'
-    if (!fabricOk(left) || !fabricOk(right) || !fabricOk(bottom)) {
-      setResponseStatus(event, 400)
-      return { success: false, error: 'One of the selected fabrics is no longer available.' }
-    }
 
-    const retailPriceXcdCents =
-      fields.package === 'the_works' ? eventRow.the_works_price_xcd_cents : eventRow.classic_mix_price_xcd_cents
+    let left, right, bottom, onepiece
+    if (isBikini) {
+      left = fabricById.get(fields.leftFabricId)
+      right = fabricById.get(fields.rightFabricId)
+      bottom = fabricById.get(fields.bottomFabricId)
+      if (!fabricOk(left) || !fabricOk(right) || !fabricOk(bottom)) {
+        setResponseStatus(event, 400)
+        return { success: false, error: 'One of the selected fabrics is no longer available.' }
+      }
+    } else {
+      onepiece = fabricById.get(fields.onepieceFabricId)
+      if (!fabricOk(onepiece)) {
+        setResponseStatus(event, 400)
+        return { success: false, error: 'The selected fabric is no longer available.' }
+      }
+      // Admin test mode exercises the same eligibility rule real customers
+      // face, so it stays a faithful rehearsal of the real flow.
+      const { data: linkRow, error: linkErr } = await supabase
+        .from('bikini_mix_fabrics')
+        .select('eligible_for_onepiece')
+        .eq('fabric_id', fields.onepieceFabricId)
+        .maybeSingle()
+      if (linkErr) {
+        console.error('[bikini-mix test-checkout] one-piece eligibility lookup failed:', linkErr.message)
+        setResponseStatus(event, 500)
+        return { success: false, error: GENERIC_ERROR }
+      }
+      if (!linkRow?.eligible_for_onepiece) {
+        setResponseStatus(event, 400)
+        return { success: false, error: 'That fabric is not available for one-pieces.' }
+      }
+    }
 
     const { data: booking, error: claimErr } = await supabase.rpc('claim_bikini_mix_booking_test', {
       p_checkout_idempotency_key: fields.checkoutIdempotencyKey,
-      p_package: fields.package,
-      p_retail_price_xcd_cents: retailPriceXcdCents,
+      p_garment_type: fields.garmentType,
       p_top_size: fields.topSize,
-      p_left_fabric_id: left.id,
-      p_left_fabric_name: left.name,
-      p_left_fabric_hex: left.hex_color,
-      p_right_fabric_id: right.id,
-      p_right_fabric_name: right.name,
-      p_right_fabric_hex: right.hex_color,
+      p_left_fabric_id: left?.id ?? null,
+      p_left_fabric_name: left?.name ?? null,
+      p_left_fabric_hex: left?.hex_color ?? null,
+      p_right_fabric_id: right?.id ?? null,
+      p_right_fabric_name: right?.name ?? null,
+      p_right_fabric_hex: right?.hex_color ?? null,
       p_bottom_style: fields.bottomStyle,
       p_bottom_coverage: fields.bottomCoverage,
       p_bottom_size: fields.bottomSize,
-      p_bottom_fabric_id: bottom.id,
-      p_bottom_fabric_name: bottom.name,
-      p_bottom_fabric_hex: bottom.hex_color,
+      p_bottom_fabric_id: bottom?.id ?? null,
+      p_bottom_fabric_name: bottom?.name ?? null,
+      p_bottom_fabric_hex: bottom?.hex_color ?? null,
+      p_bottom_scrunch: fields.bottomScrunch,
+      p_onepiece_size: fields.onepieceSize,
+      p_onepiece_coverage: fields.onepieceCoverage,
+      p_onepiece_fabric_id: onepiece?.id ?? null,
+      p_onepiece_fabric_name: onepiece?.name ?? null,
+      p_onepiece_fabric_hex: onepiece?.hex_color ?? null,
       p_full_name: fields.fullName,
       p_email: fields.email,
       p_whatsapp: fields.whatsapp,
-      p_personalization_name: fields.personalizationName,
       p_marketing_opt_in: fields.marketingOptIn,
       p_terms_accepted_at: new Date().toISOString()
     })
@@ -130,10 +143,28 @@ export default defineEventHandler(async (event) => {
       return { success: false, error: GENERIC_ERROR }
     }
 
+    // Same best-effort, non-blocking measurements save as the real checkout
+    // endpoint (server/api/bikini-mix/checkout.post.js) — see its comment.
+    const hasMeasurements = [fields.bustInches, fields.underbustInches, fields.waistInches, fields.hipsInches].some((v) => v != null)
+    if (hasMeasurements) {
+      const { error: measurementsErr } = await supabase
+        .from('bikini_mix_bookings')
+        .update({
+          bust_inches: fields.bustInches,
+          underbust_inches: fields.underbustInches,
+          waist_inches: fields.waistInches,
+          hips_inches: fields.hipsInches
+        })
+        .eq('id', booking.id)
+      if (measurementsErr) console.error('[bikini-mix test-checkout] could not save measurements:', measurementsErr.message)
+    }
+
     const bookingRef = `BKM-${String(booking.booking_number).padStart(6, '0')}`
+    const isEarlyBird = booking.early_bird_quoted === true
+    const retailPriceXcdCents = booking.retail_price_xcd_cents
 
     if (booking.paid_at) {
-      return { success: true, alreadyPaid: true, bookingRef, isTest: true }
+      return { success: true, alreadyPaid: true, bookingRef, isTest: true, isEarlyBird, retailPriceXcdCents }
     }
 
     const chargeUsdCents = booking.charged_usd_cents ?? TEST_CHARGE_USD_CENTS
@@ -141,7 +172,7 @@ export default defineEventHandler(async (event) => {
     const savedUrl = booking.go2pay_payment_url ?? null
 
     if (savedUrl) {
-      return { success: true, paymentUrl: savedUrl, bookingRef, isTest: true }
+      return { success: true, paymentUrl: savedUrl, bookingRef, isTest: true, isEarlyBird, retailPriceXcdCents }
     }
 
     if (savedRequestId) {
@@ -166,12 +197,12 @@ export default defineEventHandler(async (event) => {
       )
       if (fin.error || !fin.data?.length) {
         const re = await supabase.from('bikini_mix_bookings').select('paid_at, go2pay_payment_url').eq('id', booking.id).maybeSingle()
-        if (re.data?.paid_at) return { success: true, alreadyPaid: true, bookingRef, isTest: true }
-        if (re.data?.go2pay_payment_url) return { success: true, paymentUrl: re.data.go2pay_payment_url, bookingRef, isTest: true }
+        if (re.data?.paid_at) return { success: true, alreadyPaid: true, bookingRef, isTest: true, isEarlyBird, retailPriceXcdCents }
+        if (re.data?.go2pay_payment_url) return { success: true, paymentUrl: re.data.go2pay_payment_url, bookingRef, isTest: true, isEarlyBird, retailPriceXcdCents }
         setResponseStatus(event, 502)
         return { success: false, error: PAYMENT_INIT_ERROR }
       }
-      return { success: true, paymentUrl: recoveredUrl, bookingRef, isTest: true }
+      return { success: true, paymentUrl: recoveredUrl, bookingRef, isTest: true, isEarlyBird, retailPriceXcdCents }
     }
 
     let base
@@ -186,7 +217,7 @@ export default defineEventHandler(async (event) => {
     let go2pay
     try {
       go2pay = await createPaymentRequest({
-        name: `${TEST_BOOKING_NAME_PREFIX} Bikini Mixer — ${PACKAGE_LABEL[booking.package] || booking.package}`,
+        name: `${TEST_BOOKING_NAME_PREFIX} The Swimsuit Mixer — ${isEarlyBird ? 'Early Bird Ticket' : 'Ticket'}`,
         email: booking.email,
         phone: booking.whatsapp,
         amount: Number((chargeUsdCents / 100).toFixed(2)),
@@ -215,8 +246,8 @@ export default defineEventHandler(async (event) => {
     if (claim.error || !claim.data?.length) {
       console.error('[bikini-mix test-checkout] CLAIM failed — orphan Go2Pay request', JSON.stringify({ bookingId: booking.id, go2payRequestId: go2pay.id }))
       const re = await supabase.from('bikini_mix_bookings').select('paid_at, go2pay_payment_url').eq('id', booking.id).maybeSingle()
-      if (re.data?.paid_at) return { success: true, alreadyPaid: true, bookingRef, isTest: true }
-      if (re.data?.go2pay_payment_url) return { success: true, paymentUrl: re.data.go2pay_payment_url, bookingRef, isTest: true }
+      if (re.data?.paid_at) return { success: true, alreadyPaid: true, bookingRef, isTest: true, isEarlyBird, retailPriceXcdCents }
+      if (re.data?.go2pay_payment_url) return { success: true, paymentUrl: re.data.go2pay_payment_url, bookingRef, isTest: true, isEarlyBird, retailPriceXcdCents }
       setResponseStatus(event, 502)
       return { success: false, error: PAYMENT_INIT_ERROR }
     }
@@ -233,13 +264,13 @@ export default defineEventHandler(async (event) => {
     )
     if (fin.error || !fin.data?.length) {
       const re = await supabase.from('bikini_mix_bookings').select('paid_at, go2pay_payment_url').eq('id', booking.id).maybeSingle()
-      if (re.data?.paid_at) return { success: true, alreadyPaid: true, bookingRef, isTest: true }
-      if (re.data?.go2pay_payment_url) return { success: true, paymentUrl: re.data.go2pay_payment_url, bookingRef, isTest: true }
+      if (re.data?.paid_at) return { success: true, alreadyPaid: true, bookingRef, isTest: true, isEarlyBird, retailPriceXcdCents }
+      if (re.data?.go2pay_payment_url) return { success: true, paymentUrl: re.data.go2pay_payment_url, bookingRef, isTest: true, isEarlyBird, retailPriceXcdCents }
       setResponseStatus(event, 502)
       return { success: false, error: PAYMENT_INIT_ERROR }
     }
 
-    return { success: true, paymentUrl: go2pay.payment_url, bookingRef, isTest: true }
+    return { success: true, paymentUrl: go2pay.payment_url, bookingRef, isTest: true, isEarlyBird, retailPriceXcdCents }
   } catch (err) {
     console.error('[bikini-mix test-checkout] unexpected error:', err?.message)
     setResponseStatus(event, 500)

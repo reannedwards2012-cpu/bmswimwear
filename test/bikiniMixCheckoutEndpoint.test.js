@@ -5,10 +5,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
  * stubbed-globals + mocked-Supabase approach as test/bikiniMixEndpoints.test.js,
  * plus a mocked server/utils/go2pay.js so no real Go2Pay API call is ever
  * made. This proves the endpoint's state machine (closed/full rejection,
- * fresh request creation, idempotent reuse, already-paid short-circuit) —
- * the real RPC's own capacity/concurrency logic is covered separately by
- * the migration's own design + the earlier live verification that calling
- * it while closed correctly rejects without creating a row.
+ * fresh request creation, idempotent reuse, already-paid short-circuit),
+ * AND — critically for the single-ticket/early-bird redesign — that the
+ * endpoint never computes a price itself: it always reads back whatever
+ * claim_bikini_mix_booking() authoritatively returned. The RPC's own
+ * reservation/concurrency logic is covered separately, directly against a
+ * real local Postgres instance (see the implementation report).
  */
 
 vi.mock('../server/utils/supabaseAdmin.js', () => ({ supabaseAdmin: vi.fn() }))
@@ -34,38 +36,53 @@ const event = (body) => ({ _body: body, _status: 200 })
 const FAB_LEFT = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 const FAB_RIGHT = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
 const FAB_BOTTOM = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+const FAB_ONEPIECE = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
 
-const VALID_BODY = {
+const VALID_BIKINI_BODY = {
   checkoutIdempotencyKey: '11111111-1111-1111-1111-111111111111',
-  package: 'classic_mix',
+  garmentType: 'bikini',
   topSize: 'M',
   bottomSize: 'M',
   bottomStyle: 'tie-side',
   bottomCoverage: 'bikini',
+  bottomScrunch: false,
   leftFabricId: FAB_LEFT,
   rightFabricId: FAB_RIGHT,
   bottomFabricId: FAB_BOTTOM,
   fullName: 'Jane Guest',
   email: 'jane@example.com',
   whatsapp: '+1 473 555 1234',
-  personalizationName: null,
   marketingOptIn: false,
   termsAccepted: true
 }
 
-const EVENT_ROW = { classic_mix_price_xcd_cents: 16000, the_works_price_xcd_cents: 20000 }
+const VALID_ONEPIECE_BODY = {
+  checkoutIdempotencyKey: '22222222-2222-2222-2222-222222222222',
+  garmentType: 'onepiece',
+  onepieceSize: 'M',
+  onepieceCoverage: 'cheeky',
+  onepieceFabricId: FAB_ONEPIECE,
+  fullName: 'Jane Guest',
+  email: 'jane@example.com',
+  whatsapp: '+1 473 555 1234',
+  marketingOptIn: false,
+  termsAccepted: true
+}
+
 const FABRIC_ROWS = [
   { id: FAB_LEFT, name: 'Sunset Coral', hex_color: '#E66B45', is_active: true, status: 'available' },
   { id: FAB_RIGHT, name: 'Sunset Coral', hex_color: '#E66B45', is_active: true, status: 'available' },
-  { id: FAB_BOTTOM, name: 'Sunset Coral', hex_color: '#E66B45', is_active: true, status: 'available' }
+  { id: FAB_BOTTOM, name: 'Sunset Coral', hex_color: '#E66B45', is_active: true, status: 'available' },
+  { id: FAB_ONEPIECE, name: 'Sunset Coral', hex_color: '#E66B45', is_active: true, status: 'available' }
 ]
 
 function freshBookingRow(overrides = {}) {
   return {
     id: 'bkg-1',
     booking_number: 7,
-    package: 'classic_mix',
-    retail_price_xcd_cents: 16000,
+    package: 'ticket',
+    early_bird_quoted: true,
+    retail_price_xcd_cents: 22500,
     charged_usd_cents: null,
     go2pay_request_id: null,
     go2pay_payment_url: null,
@@ -77,17 +94,17 @@ function freshBookingRow(overrides = {}) {
   }
 }
 
-/** Builds a fake supabase client: `fabrics`/`bikini_mix_event` reads + `bikini_mix_bookings` guarded updates. */
-function fakeSupabase({ rpcResult, updateResults = [] }) {
+/** Builds a fake supabase client: `fabrics`/`bikini_mix_fabrics` reads + `bikini_mix_bookings` guarded updates. */
+function fakeSupabase({ rpcResult, updateResults = [], onepieceEligible = true }) {
   let updateCallIndex = 0
   return {
     rpc: vi.fn().mockResolvedValue(rpcResult),
     from(table) {
-      if (table === 'bikini_mix_event') {
-        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: EVENT_ROW, error: null }) }) }) }
-      }
       if (table === 'fabrics') {
         return { select: () => ({ in: () => Promise.resolve({ data: FABRIC_ROWS, error: null }) }) }
+      }
+      if (table === 'bikini_mix_fabrics') {
+        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { eligible_for_onepiece: onepieceEligible }, error: null }) }) }) }
       }
       if (table === 'bikini_mix_bookings') {
         const chain = {
@@ -130,7 +147,7 @@ describe('POST /api/bikini-mix/checkout', () => {
     const supabase = fakeSupabase({ rpcResult: { data: null, error: null } })
     supabaseAdmin.mockReturnValue(supabase)
 
-    const e = event({ ...VALID_BODY, email: 'not-an-email' })
+    const e = event({ ...VALID_BIKINI_BODY, email: 'not-an-email' })
     const res = await handler(e)
 
     expect(e._status).toBe(400)
@@ -143,7 +160,7 @@ describe('POST /api/bikini-mix/checkout', () => {
     const supabase = fakeSupabase({ rpcResult: { data: null, error: { code: '55000', message: 'bookings are closed' } } })
     supabaseAdmin.mockReturnValue(supabase)
 
-    const res = await handler(event(VALID_BODY))
+    const res = await handler(event(VALID_BIKINI_BODY))
 
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/closed/i)
@@ -157,7 +174,7 @@ describe('POST /api/bikini-mix/checkout', () => {
     })
     supabaseAdmin.mockReturnValue(supabase)
 
-    const res = await handler(event(VALID_BODY))
+    const res = await handler(event(VALID_BIKINI_BODY))
 
     expect(res.success).toBe(true)
     expect(res.alreadyPaid).toBe(true)
@@ -171,7 +188,7 @@ describe('POST /api/bikini-mix/checkout', () => {
     })
     supabaseAdmin.mockReturnValue(supabase)
 
-    const res = await handler(event(VALID_BODY))
+    const res = await handler(event(VALID_BIKINI_BODY))
 
     expect(res.success).toBe(true)
     expect(res.paymentUrl).toBe('https://go2pay.gd/pay/req-1')
@@ -187,7 +204,7 @@ describe('POST /api/bikini-mix/checkout', () => {
     })
     supabaseAdmin.mockReturnValue(supabase)
 
-    const res = await handler(event(VALID_BODY))
+    const res = await handler(event(VALID_BIKINI_BODY))
 
     expect(res.success).toBe(true)
     expect(res.paymentUrl).toBe('https://go2pay.gd/pay/req-1')
@@ -195,11 +212,11 @@ describe('POST /api/bikini-mix/checkout', () => {
     expect(getPaymentRequest).toHaveBeenCalledWith('req-1')
   })
 
-  it('creates exactly one Go2Pay request on a fresh booking (STATE 3) and returns its payment URL', async () => {
+  it('creates exactly one Go2Pay request on a fresh booking (STATE 3), using the PRICE THE RPC RETURNED — never a client/endpoint-computed one', async () => {
     const handler = await loadHandler()
     createPaymentRequest.mockResolvedValue({ id: 'req-new', payment_url: 'https://go2pay.gd/pay/req-new' })
     const supabase = fakeSupabase({
-      rpcResult: { data: freshBookingRow(), error: null },
+      rpcResult: { data: freshBookingRow({ early_bird_quoted: true, retail_price_xcd_cents: 22500 }), error: null },
       updateResults: [
         { data: [{ id: 'bkg-1' }], error: null }, // CLAIM
         { data: [{ id: 'bkg-1' }], error: null } // FINALIZE
@@ -207,20 +224,41 @@ describe('POST /api/bikini-mix/checkout', () => {
     })
     supabaseAdmin.mockReturnValue(supabase)
 
-    const res = await handler(event(VALID_BODY))
+    const res = await handler(event(VALID_BIKINI_BODY))
 
     expect(res.success).toBe(true)
     expect(res.paymentUrl).toBe('https://go2pay.gd/pay/req-new')
+    expect(res.isEarlyBird).toBe(true)
+    expect(res.retailPriceXcdCents).toBe(22500)
     expect(createPaymentRequest).toHaveBeenCalledTimes(1)
     const sentAmount = createPaymentRequest.mock.calls[0][0].amount
-    expect(sentAmount).toBeCloseTo(59.26, 2) // EC$160.00 at US$1 = EC$2.70
+    expect(sentAmount).toBeCloseTo(83.33, 2) // EC$225.00 at US$1 = EC$2.70
+  })
+
+  it('a regular-priced (non-early-bird) booking is charged the RPC-returned regular price', async () => {
+    const handler = await loadHandler()
+    createPaymentRequest.mockResolvedValue({ id: 'req-new', payment_url: 'https://go2pay.gd/pay/req-new' })
+    const supabase = fakeSupabase({
+      rpcResult: { data: freshBookingRow({ early_bird_quoted: false, retail_price_xcd_cents: 25000 }), error: null },
+      updateResults: [
+        { data: [{ id: 'bkg-1' }], error: null },
+        { data: [{ id: 'bkg-1' }], error: null }
+      ]
+    })
+    supabaseAdmin.mockReturnValue(supabase)
+
+    const res = await handler(event(VALID_BIKINI_BODY))
+
+    expect(res.isEarlyBird).toBe(false)
+    expect(res.retailPriceXcdCents).toBe(25000)
+    const sentAmount = createPaymentRequest.mock.calls[0][0].amount
+    expect(sentAmount).toBeCloseTo(92.59, 2) // EC$250.00 at US$1 = EC$2.70
   })
 
   it('rejects when a selected fabric is no longer available', async () => {
     const handler = await loadHandler()
     const supabase = fakeSupabase({ rpcResult: { data: freshBookingRow(), error: null } })
     supabase.from = (table) => {
-      if (table === 'bikini_mix_event') return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: EVENT_ROW, error: null }) }) }) }
       if (table === 'fabrics') {
         return {
           select: () => ({
@@ -240,10 +278,44 @@ describe('POST /api/bikini-mix/checkout', () => {
     }
     supabaseAdmin.mockReturnValue(supabase)
 
-    const res = await handler(event(VALID_BODY))
+    const res = await handler(event(VALID_BIKINI_BODY))
 
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/fabric/i)
+    expect(supabase.rpc).not.toHaveBeenCalled()
+  })
+
+  it('one-piece checkout succeeds and passes a single fabric to the RPC', async () => {
+    const handler = await loadHandler()
+    createPaymentRequest.mockResolvedValue({ id: 'req-new', payment_url: 'https://go2pay.gd/pay/req-new' })
+    const supabase = fakeSupabase({
+      rpcResult: { data: freshBookingRow({ early_bird_quoted: false, retail_price_xcd_cents: 25000 }), error: null },
+      updateResults: [
+        { data: [{ id: 'bkg-1' }], error: null },
+        { data: [{ id: 'bkg-1' }], error: null }
+      ],
+      onepieceEligible: true
+    })
+    supabaseAdmin.mockReturnValue(supabase)
+
+    const res = await handler(event(VALID_ONEPIECE_BODY))
+
+    expect(res.success).toBe(true)
+    const rpcArgs = supabase.rpc.mock.calls[0][1]
+    expect(rpcArgs.p_garment_type).toBe('onepiece')
+    expect(rpcArgs.p_onepiece_fabric_id).toBe(FAB_ONEPIECE)
+    expect(rpcArgs.p_left_fabric_id).toBeNull()
+  })
+
+  it('rejects a one-piece checkout when the fabric is not eligible for one-pieces — server-side, never trusting the client filter', async () => {
+    const handler = await loadHandler()
+    const supabase = fakeSupabase({ rpcResult: { data: freshBookingRow(), error: null }, onepieceEligible: false })
+    supabaseAdmin.mockReturnValue(supabase)
+
+    const res = await handler(event(VALID_ONEPIECE_BODY))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/one-piece/i)
     expect(supabase.rpc).not.toHaveBeenCalled()
   })
 })
