@@ -78,7 +78,7 @@
               <li v-for="(it, i) in order.items" :key="i" class="flex gap-3 py-4">
                 <img
                   v-if="it.image"
-                  :src="it.image"
+                  :src="freshImageUrls[it.id] || it.image"
                   :alt="it.productName"
                   class="aspect-[3/4] w-16 shrink-0 rounded-xl object-cover"
                 />
@@ -342,7 +342,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatMoney } from '~/utils/money'
 import IconArchive from '~/components/IconArchive.vue'
 import IconRestore from '~/components/IconRestore.vue'
@@ -376,6 +376,40 @@ const { data, pending, error: loadError, refresh } = useLazyAsyncData(
 )
 
 const order = computed(() => data.value?.order ?? null)
+
+// Phase 2 follow-up: signed image URLs expire (30 min, server/utils/orderImages.js
+// ORDER_IMAGE_SIGNED_URL_TTL_SECONDS). This silently renews them on a timer via
+// a DEDICATED lightweight endpoint — never `refresh()` / `data.value` — so a
+// long-open page keeps working without a manual reload, and critically,
+// without ever retriggering the `watch(order, ...)` below that would wipe an
+// in-progress, unsaved adminNotesDraft edit. Keyed by order_items.id (not
+// array index) so a mismatched order between two separate requests can never
+// apply one item's fresh URL to a different item.
+const freshImageUrls = ref({})
+const IMAGE_REFRESH_INTERVAL_MS = 20 * 60 * 1000 // comfortably inside the 30-min TTL
+let imageRefreshTimer = null
+
+async function refreshImageUrls() {
+  const oid = route.params.id
+  if (!oid) return
+  try {
+    const res = await authedFetch(`/api/admin/orders/${oid}/image-urls`)
+    const next = { ...freshImageUrls.value }
+    for (const im of res.images ?? []) next[im.id] = im.image
+    freshImageUrls.value = next
+  } catch (err) {
+    // Best-effort — a transient failure leaves whatever URLs are already
+    // showing untouched (never nulled out), and the next tick retries.
+    console.warn('[admin/orders] image refresh skipped:', err?.message)
+  }
+}
+
+onMounted(() => {
+  imageRefreshTimer = window.setInterval(refreshImageUrls, IMAGE_REFRESH_INTERVAL_MS)
+})
+onBeforeUnmount(() => {
+  if (imageRefreshTimer) window.clearInterval(imageRefreshTimer)
+})
 
 // Admin notes — private, editable independently of everything else on the
 // order. Loaded with the order, saved via its own endpoint; never touches

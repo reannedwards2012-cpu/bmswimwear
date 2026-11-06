@@ -12,7 +12,11 @@ import { randomUUID } from 'node:crypto'
 import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../utils/authUser.js'
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES, extForMime } from '../../../utils/fabricImages.js'
-import { QUOTE_INSPIRATION_IMAGE_BUCKET } from '../../../utils/quoteInspirationImages.js'
+import {
+  QUOTE_INSPIRATION_IMAGE_BUCKET,
+  QUOTE_INSPIRATION_UPLOAD_PREVIEW_TTL_SECONDS,
+  signQuoteInspirationImageUrl
+} from '../../../utils/quoteInspirationImages.js'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event) // throws 401 / 403
@@ -61,8 +65,13 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    // Same pattern as server/api/admin/orders/image.post.js: `url` is the
+    // canonical stored value (unchanged shape); `previewUrl` is a
+    // short-lived signed URL for immediately displaying the just-uploaded
+    // image before the quote itself is saved.
     const { data } = supabase.storage.from(QUOTE_INSPIRATION_IMAGE_BUCKET).getPublicUrl(path)
-    return { url: data.publicUrl }
+    const previewUrl = await signQuoteInspirationImageUrl(supabase, data.publicUrl, QUOTE_INSPIRATION_UPLOAD_PREVIEW_TTL_SECONDS)
+    return { url: data.publicUrl, previewUrl: previewUrl || data.publicUrl }
   } catch (err) {
     console.error('[admin/quotes/inspiration-image] unexpected error:', err?.message)
     setResponseStatus(event, 500)

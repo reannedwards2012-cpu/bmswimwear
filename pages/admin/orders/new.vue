@@ -181,13 +181,13 @@
               <span class="lbl">Reference / design image</span>
               <div class="mt-1.5 flex items-center gap-3">
                 <span class="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-ink/10 bg-sand/40">
-                  <img v-if="it.imageUrl" :src="it.imageUrl" alt="" class="h-full w-full object-cover" />
+                  <img v-if="it.imageUrl" :src="it._previewUrl || it.imageUrl" alt="" class="h-full w-full object-cover" />
                 </span>
                 <div>
                   <button type="button" class="btn-outline px-4 py-1.5 text-xs" :disabled="it._uploading" @click="pickImage(i)">
                     {{ it._uploading ? 'Uploading…' : it.imageUrl ? 'Replace' : 'Upload image' }}
                   </button>
-                  <button v-if="it.imageUrl" type="button" class="ml-3 text-xs font-semibold text-coral link-underline" @click="it.imageUrl = ''">Remove</button>
+                  <button v-if="it.imageUrl" type="button" class="ml-3 text-xs font-semibold text-coral link-underline" @click="it.imageUrl = ''; it._previewUrl = ''">Remove</button>
                   <p class="mt-1 text-xs text-ink/40">JPEG, PNG or WebP · up to 5MB.</p>
                   <p v-if="it._imgError" class="text-xs text-coral">{{ it._imgError }}</p>
                 </div>
@@ -275,6 +275,7 @@ const blankItem = () => ({
   description: '',
   colour: '',
   imageUrl: '',
+  _previewUrl: '', // Phase 2: short-lived signed URL for display only — imageUrl (unchanged shape) is what's actually submitted
   _uploading: false,
   _imgError: '',
   price: '',
@@ -380,8 +381,9 @@ async function onFileChosen(e) {
   try {
     const body = new FormData()
     body.append('file', file)
-    const { url } = await authedFetch('/api/admin/orders/image', { method: 'POST', body })
+    const { url, previewUrl } = await authedFetch('/api/admin/orders/image', { method: 'POST', body })
     it.imageUrl = url
+    it._previewUrl = previewUrl || url
   } catch (err) {
     it._imgError = err?.data?.error || 'Upload failed.'
   } finally {

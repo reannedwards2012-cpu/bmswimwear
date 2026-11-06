@@ -39,7 +39,7 @@ export const ORDER_DETAIL_SELECT = `
   delivery_method, shipping_country, shipping_address1, shipping_address2,
   shipping_city, shipping_region, shipping_postal_code,
   notes, admin_notes, payment_id,
-  order_items ( product_name, image, description, is_custom, quantity, size, colour_name, coverage, unit_price_usd_cents, unit_price_xcd_cents )
+  order_items ( id, product_name, image, description, is_custom, quantity, size, colour_name, coverage, unit_price_usd_cents, unit_price_xcd_cents )
 `.trim()
 
 // Light select for the admin list + dashboard recentOrders.
@@ -117,6 +117,7 @@ export function mapOrderDetail(o) {
     adminNotes: o.admin_notes,
     paymentId: o.payment_id,
     items: (o.order_items ?? []).map((it) => ({
+      id: it.id,
       productName: it.product_name,
       image: it.image,
       description: it.description ?? null,

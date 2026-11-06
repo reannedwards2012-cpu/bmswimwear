@@ -36,6 +36,7 @@
         :saving="saving"
         :form-error="formError"
         :form-issues="formIssues"
+        :live-preview-urls="livePreviewUrls"
         @submit="onSubmit"
       />
     </div>
@@ -43,7 +44,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { formatMoney } from '~/utils/money.js'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
@@ -70,6 +71,32 @@ const { data, pending, error: loadError, refresh } = useLazyAsyncData(
 )
 
 const quote = computed(() => data.value?.quote?.quote)
+
+// Phase 2 follow-up: signed inspiration-image URLs expire (30 min,
+// server/utils/quoteInspirationImages.js QUOTE_INSPIRATION_SIGNED_URL_TTL_SECONDS).
+// Silently renewed on a timer via a dedicated lightweight endpoint — never
+// `refresh()` — so this never touches `data.value`/`quote` and can't disturb
+// the in-progress Quote Calculator form underneath it.
+const livePreviewUrls = ref(null)
+const IMAGE_REFRESH_INTERVAL_MS = 20 * 60 * 1000 // comfortably inside the 30-min TTL
+let imageRefreshTimer = null
+
+async function refreshImageUrls() {
+  try {
+    const res = await authedFetch(`/api/admin/quotes/${id}/image-urls`)
+    livePreviewUrls.value = res.previewUrls ?? []
+  } catch (err) {
+    // Best-effort — leave whatever's currently showing untouched; retry next tick.
+    console.warn('[admin/quotes] image refresh skipped:', err?.message)
+  }
+}
+
+onMounted(() => {
+  imageRefreshTimer = window.setInterval(refreshImageUrls, IMAGE_REFRESH_INTERVAL_MS)
+})
+onBeforeUnmount(() => {
+  if (imageRefreshTimer) window.clearInterval(imageRefreshTimer)
+})
 
 const saving = ref(false)
 const formError = ref('')

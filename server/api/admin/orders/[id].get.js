@@ -8,6 +8,7 @@ import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../utils/authUser.js'
 import { ORDER_DETAIL_SELECT, mapOrderDetail } from '../../../utils/orderMappers.js'
 import { isAdminVisibleOrder } from '../../../utils/orderStatus.js'
+import { signOrderImageUrl, orderImagePathFromPublicUrl } from '../../../utils/orderImages.js'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -43,7 +44,28 @@ export default defineEventHandler(async (event) => {
       return { error: 'Order not found.' }
     }
 
-    return { order: mapOrderDetail(data) }
+    const order = mapOrderDetail(data)
+
+    // Phase 2: 'order-images' is a private bucket — a stored URL pointing
+    // into it is only ever a path to resolve, never something servable
+    // as-is. Only items that actually reference THAT bucket are touched;
+    // a catalogue item's `image` is a static site asset (/images/products/…)
+    // or a different, still-public bucket (product-images) and is passed
+    // through completely unchanged — orderImagePathFromPublicUrl() only
+    // matches 'order-images' URLs, so this can't accidentally blank a
+    // catalogue thumbnail. Each match is resolved from THIS already-admin-
+    // gated, id-scoped order's own row — never a client-supplied path — so
+    // a signed URL for one customer's reference image can never be minted
+    // via a guessed/modified id for another's.
+    if (order.items?.length) {
+      const signedImages = await Promise.all(order.items.map((it) => signOrderImageUrl(supabase, it.image)))
+      order.items = order.items.map((it, i) => ({
+        ...it,
+        image: orderImagePathFromPublicUrl(it.image) ? signedImages[i] : it.image
+      }))
+    }
+
+    return { order }
   } catch (err) {
     console.error('[admin/orders] unexpected error:', err?.message)
     setResponseStatus(event, 500)

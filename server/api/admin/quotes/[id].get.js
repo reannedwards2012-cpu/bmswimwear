@@ -7,6 +7,7 @@
 import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../utils/authUser.js'
 import { QUOTE_DETAIL_SELECT, mapQuoteDetail } from '../../../utils/quoteMappers.js'
+import { signQuoteInspirationImageUrls } from '../../../utils/quoteInspirationImages.js'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -33,7 +34,18 @@ export default defineEventHandler(async (event) => {
       return { error: 'Quote not found.' }
     }
 
-    return { quote: mapQuoteDetail(row) }
+    const quote = mapQuoteDetail(row)
+
+    // Phase 2: 'quote-inspiration-images' is a private bucket now. Keep
+    // `inspirationImageUrls` as the unchanged, canonical (stored-shape)
+    // values — the Quote Calculator form re-submits them verbatim on save,
+    // so substituting signed URLs there would corrupt the stored data.
+    // `inspirationImagePreviewUrls` is a parallel, display-only array
+    // (same order/length) for actually rendering the <img> tags. Both are
+    // derived from this one already-admin-gated, id-scoped quote row.
+    quote.inspirationImagePreviewUrls = await signQuoteInspirationImageUrls(supabase, quote.inspirationImageUrls)
+
+    return { quote }
   } catch (err) {
     console.error('[admin/quotes] unexpected error:', err?.message)
     setResponseStatus(event, 500)

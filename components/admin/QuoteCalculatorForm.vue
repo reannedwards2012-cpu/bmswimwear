@@ -37,7 +37,7 @@
         <p class="lbl">Inspiration images <span class="font-normal normal-case text-ink/35">(optional)</span></p>
         <div class="mt-2 flex flex-wrap gap-3">
           <div v-for="(url, i) in form.inspirationImageUrls" :key="url" class="relative h-20 w-20 overflow-hidden rounded-2xl border border-ink/10">
-            <img :src="url" alt="" class="h-full w-full object-cover" />
+            <img :src="imagePreviewUrls[i] || url" alt="" class="h-full w-full object-cover" />
             <button
               type="button"
               class="absolute right-0.5 top-0.5 grid h-5 w-5 place-items-center rounded-full bg-ink/70 text-xs text-cream"
@@ -251,7 +251,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { formatMoney } from '~/utils/money.js'
 import { calculateQuote, QUOTE_CATEGORIES, QUOTE_CATEGORY_LABELS } from '~/utils/quoteCalculator.js'
 
@@ -263,7 +263,11 @@ const props = defineProps({
   saving: { type: Boolean, default: false },
   formError: { type: String, default: '' },
   formIssues: { type: Array, default: () => [] },
-  showCancel: { type: Boolean, default: false }
+  showCancel: { type: Boolean, default: false },
+  // Phase 2 follow-up: the parent's background timer pushes a freshly-signed
+  // replacement array here as inspiration images' signed URLs approach
+  // expiry — null means "nothing refreshed yet, keep what setup seeded".
+  livePreviewUrls: { type: Array, default: null }
 })
 const emit = defineEmits(['submit', 'cancel'])
 
@@ -365,6 +369,28 @@ function fromQuote(q) {
 // are fresh at setup time — matches FabricForm.vue's convention.
 const form = reactive(props.quote ? fromQuote(props.quote) : blankForm())
 
+// Phase 2: display-only short-lived signed URLs, parallel to (never
+// replacing) form.inspirationImageUrls — that array is the canonical,
+// stored-shape value and gets re-submitted verbatim on save, so it must
+// never hold a signed URL. Kept in lockstep by index on every add/remove.
+const imagePreviewUrls = ref(props.quote ? [...(props.quote.inspirationImagePreviewUrls ?? [])] : [])
+
+// Apply a background refresh ONLY when it still matches the canonical
+// array's current length — if the admin has since added/removed an image
+// locally, a refresh computed from the old list would misapply by index
+// (inspiration images have no stable per-entry id to correlate by instead),
+// so it's safely skipped rather than risking the wrong thumbnail. The
+// admin's own just-added images already carry their own fresh preview URL
+// from the upload endpoint regardless.
+watch(
+  () => props.livePreviewUrls,
+  (urls) => {
+    if (Array.isArray(urls) && urls.length === form.inspirationImageUrls.length) {
+      imagePreviewUrls.value = [...urls]
+    }
+  }
+)
+
 function onCategoryChange() {
   const def = CATEGORY_DEFAULTS[form.category]
   if (!def) return
@@ -451,6 +477,7 @@ async function onImageSelected(e) {
       body
     })
     form.inspirationImageUrls.push(res.url)
+    imagePreviewUrls.value.push(res.previewUrl || res.url)
   } catch (err) {
     imageUploadError.value = err?.data?.error || 'Upload failed — please try again.'
   } finally {
@@ -460,6 +487,7 @@ async function onImageSelected(e) {
 
 async function removeImage(index) {
   const [url] = form.inspirationImageUrls.splice(index, 1)
+  imagePreviewUrls.value.splice(index, 1)
   if (!url) return
   try {
     const token = await getAccessToken()

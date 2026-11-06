@@ -10,7 +10,14 @@
 import { randomUUID } from 'node:crypto'
 import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../utils/authUser.js'
-import { ORDER_IMAGE_BUCKET, ORDER_IMAGE_TYPES, ORDER_IMAGE_MAX_BYTES, orderExtForMime } from '../../../utils/orderImages.js'
+import {
+  ORDER_IMAGE_BUCKET,
+  ORDER_IMAGE_TYPES,
+  ORDER_IMAGE_MAX_BYTES,
+  ORDER_IMAGE_UPLOAD_PREVIEW_TTL_SECONDS,
+  orderExtForMime,
+  signOrderImageUrl
+} from '../../../utils/orderImages.js'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event) // throws 401 / 403
@@ -58,8 +65,15 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    // getPublicUrl() still returns a URL string even on a private bucket —
+    // it's just no longer fetchable without auth. Kept as the canonical
+    // STORED value (unchanged shape, so orderImagePathFromPublicUrl() keeps
+    // working on both old and new rows); `previewUrl` is a short-lived
+    // signed URL for immediately displaying what was just uploaded, before
+    // the order itself is saved.
     const { data } = supabase.storage.from(ORDER_IMAGE_BUCKET).getPublicUrl(path)
-    return { url: data.publicUrl }
+    const previewUrl = await signOrderImageUrl(supabase, data.publicUrl, ORDER_IMAGE_UPLOAD_PREVIEW_TTL_SECONDS)
+    return { url: data.publicUrl, previewUrl: previewUrl || data.publicUrl }
   } catch (err) {
     console.error('[admin/orders/image] unexpected error:', err?.message)
     setResponseStatus(event, 500)
