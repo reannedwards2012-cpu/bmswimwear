@@ -53,8 +53,43 @@
     </div>
     <p v-else-if="!images.length" class="mt-8 rounded-4xl bg-cream p-7 text-center text-sm text-ink/50 shadow-card">No photos yet.</p>
 
-    <div v-else class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-      <div v-for="img in images" :key="img.id" class="overflow-hidden rounded-3xl border border-ink/10 bg-cream shadow-card">
+    <template v-else>
+      <div class="mt-8 flex flex-wrap items-center justify-between gap-3">
+        <label class="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink/60">
+          <input
+            type="checkbox"
+            class="h-4 w-4 rounded border-ink/30 text-coral focus:ring-coral"
+            :checked="allSelected"
+            :indeterminate="indeterminate"
+            aria-label="Select all displayed photos"
+            @change="toggleAll"
+          />
+          Select all
+        </label>
+      </div>
+
+      <!-- bulk-selection action bar — appears only while something is selected -->
+      <AdminBulkActionBar :count="selectedCount" @clear="clearSelection">
+        <button
+          type="button"
+          class="rounded-full bg-coral px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-coral/90"
+          @click="bulkDeleteConfirmOpen = true"
+        >
+          Delete Selected
+        </button>
+      </AdminBulkActionBar>
+
+      <p v-if="bulkResultMessage" class="mt-4 rounded-2xl bg-shell/60 px-4 py-3 text-sm text-ink/70">{{ bulkResultMessage }}</p>
+
+      <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      <div v-for="img in images" :key="img.id" class="relative overflow-hidden rounded-3xl border border-ink/10 bg-cream shadow-card">
+        <input
+          type="checkbox"
+          class="absolute left-2 top-2 z-10 h-5 w-5 rounded border-ink/30 bg-cream/90 text-coral focus:ring-coral"
+          :checked="selectedIds.has(img.id)"
+          :aria-label="`Select photo ${img.caption || img.id}`"
+          @change="toggleSelected(img.id)"
+        />
         <div class="aspect-square w-full bg-cover bg-center" :style="{ backgroundImage: `url(${img.imageUrl})` }" />
         <div class="space-y-2 p-3">
           <p class="truncate text-xs font-semibold text-ink">{{ img.caption || CATEGORY_LABELS[img.category] }}</p>
@@ -69,7 +104,20 @@
           <button type="button" class="text-[0.65rem] font-semibold text-coral hover:underline" @click="remove(img)">Delete</button>
         </div>
       </div>
-    </div>
+      </div>
+    </template>
+
+    <!-- bulk delete confirm -->
+    <AdminBulkDeleteConfirmModal
+      :open="bulkDeleteConfirmOpen"
+      :count="selectedCount"
+      :busy="bulkDeleting"
+      :error="bulkDeleteError"
+      singular-noun="photo"
+      plural-noun="photos"
+      @confirm="doBulkDelete"
+      @cancel="bulkDeleteConfirmOpen = false"
+    />
   </div>
 </template>
 
@@ -112,6 +160,18 @@ watch(loadError, (err) => {
   }
 })
 const images = computed(() => data.value?.images ?? [])
+
+// ── bulk selection — scoped to whatever photos are CURRENTLY displayed ─────
+const {
+  selectedIds,
+  selectedCount,
+  toggle: toggleSelected,
+  clear: clearSelection,
+  remove: removeFromSelection,
+  allSelected,
+  indeterminate,
+  toggleAll
+} = useAdminBulkSelection(images)
 
 const fileInput = ref(null)
 const uploading = ref(false)
@@ -189,13 +249,56 @@ async function toggle(img, field) {
 async function remove(img) {
   if (previewMode.value) {
     data.value.images = data.value.images.filter((i) => i.id !== img.id)
+    removeFromSelection(img.id)
     return
   }
   try {
     await authedFetch(`/api/admin/bikini-mix/gallery/${img.id}`, { method: 'DELETE' })
     if (data.value) data.value.images = data.value.images.filter((i) => i.id !== img.id)
+    removeFromSelection(img.id)
   } catch {
     /* leave it listed if deletion failed */
+  }
+}
+
+// ── bulk delete — each photo owns its own Storage object, no cross-table
+// safety check needed (unlike fabrics/products) ──────────────────────────
+const bulkDeleteConfirmOpen = ref(false)
+const bulkDeleting = ref(false)
+const bulkDeleteError = ref('')
+const bulkResultMessage = ref('')
+let bulkResultTimer = null
+function flashBulkResult(msg) {
+  clearTimeout(bulkResultTimer)
+  bulkResultMessage.value = msg
+  bulkResultTimer = setTimeout(() => (bulkResultMessage.value = ''), 6000)
+}
+
+async function doBulkDelete() {
+  if (selectedCount.value === 0) return
+  bulkDeleting.value = true
+  bulkDeleteError.value = ''
+  const ids = [...selectedIds.value]
+
+  if (previewMode.value) {
+    data.value.images = data.value.images.filter((i) => !ids.includes(i.id))
+    bulkDeleteConfirmOpen.value = false
+    clearSelection()
+    bulkDeleting.value = false
+    flashBulkResult(`Deleted ${ids.length} photo${ids.length === 1 ? '' : 's'}.`)
+    return
+  }
+
+  try {
+    const res = await authedFetch('/api/admin/bikini-mix/gallery/bulk-delete', { method: 'POST', body: { ids } })
+    bulkDeleteConfirmOpen.value = false
+    clearSelection()
+    await refresh()
+    flashBulkResult(`Deleted ${res.deletedCount} of ${res.requestedCount} selected.`)
+  } catch (err) {
+    bulkDeleteError.value = err?.data?.error || 'Could not delete the selected photos. Please try again.'
+  } finally {
+    bulkDeleting.value = false
   }
 }
 </script>

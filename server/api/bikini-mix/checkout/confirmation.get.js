@@ -4,7 +4,7 @@ import { BOOKING_DETAIL_SELECT, mapBookingDetail } from '../../../utils/bikiniMi
 /**
  * GET /api/bikini-mix/checkout/confirmation?checkout=<uuid>
  *
- * The full booking-confirmation view for pages/bikini-mix/return.vue —
+ * The full booking-confirmation view for pages/swimsuit-mixer/return.vue —
  * booking reference, guest name, package, bikini selections, event details,
  * payment info. Keyed by the client-held `checkout_idempotency_key` (the
  * same random UUID the browser generated at Build time, held in
@@ -65,7 +65,7 @@ export default defineEventHandler(async (event) => {
         paidAt: booking.paidAt
       },
       event: {
-        eventName: eventRow?.event_name || 'The Bikini Mixer',
+        eventName: eventRow?.event_name || 'The Swimsuit Mixer',
         eventDate: eventRow?.event_date || null,
         venue: eventRow?.venue || null
       }

@@ -223,8 +223,8 @@ export default defineEventHandler(async (event) => {
         amount: Number((chargeUsdCents / 100).toFixed(2)),
         description: `${TEST_BOOKING_NAME_PREFIX} admin test booking ${bookingRef} — not a real guest`,
         endpoint: `${base}/api/payments/go2pay-bikini-mix/${booking.payment_callback_token}`,
-        success_url: `${base}/bikini-mix/return?b=${encodeURIComponent(bookingRef)}&checkout=${encodeURIComponent(fields.checkoutIdempotencyKey)}&test=1`,
-        error_url: `${base}/bikini-mix/cancelled?test=1`,
+        success_url: `${base}/swimsuit-mixer/return?b=${encodeURIComponent(bookingRef)}&checkout=${encodeURIComponent(fields.checkoutIdempotencyKey)}&test=1`,
+        error_url: `${base}/swimsuit-mixer/cancelled?test=1`,
         send_email: false,
         send_receipt: true
       })

@@ -47,11 +47,21 @@
           </label>
         </div>
 
-        <button type="submit" class="btn-primary w-full shadow-soft disabled:cursor-not-allowed disabled:opacity-60" :disabled="submitting">
+        <!-- Cloudflare Turnstile — only rendered when a site key is configured
+             (see nuxt.config.ts / README env var instructions). Local/dev
+             without a key simply skips this, matching the server-side
+             fail-open behaviour in server/utils/turnstile.js. -->
+        <div v-if="turnstileSiteKey" ref="turnstileEl" class="w-full" />
+
+        <button
+          type="submit"
+          class="btn-primary w-full shadow-soft disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="submitting || (!!turnstileSiteKey && !turnstileToken)"
+        >
           {{ submitting ? 'Sending…' : 'Send message' }}
         </button>
         <p v-if="sent" class="text-sm text-ink/70">Thanks! We've got your message and will be in touch soon.</p>
-        <p v-else-if="error" class="text-sm text-coral">{{ error }}</p>
+        <p v-else-if="error" class="text-sm text-coral" role="alert" aria-live="polite">{{ error }}</p>
       </form>
 
       <aside class="space-y-4">
@@ -95,11 +105,87 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { INQUIRY_SUBJECTS, INQUIRY_SUBJECT_SLUGS } from '~/data/constants.js'
 
 const route = useRoute()
 const SUBJECTS = INQUIRY_SUBJECTS
+
+// ── Cloudflare Turnstile ────────────────────────────────────────────────────
+// Site key is public by design (Cloudflare docs); only the secret is
+// sensitive and that never leaves server/utils/turnstile.js. No widget is
+// rendered at all when the key isn't configured (local/dev), matching the
+// server's fail-open behaviour for that same case.
+const turnstileSiteKey = useRuntimeConfig().public.turnstileSiteKey
+const turnstileEl = ref(null)
+const turnstileToken = ref('')
+let turnstileWidgetId = null
+
+const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
+const TURNSTILE_SCRIPT_ID = 'cf-turnstile-script'
+
+function loadTurnstileScript() {
+  return new Promise((resolve, reject) => {
+    if (window.turnstile) {
+      resolve()
+      return
+    }
+    const existing = document.getElementById(TURNSTILE_SCRIPT_ID)
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true })
+      existing.addEventListener('error', () => reject(new Error('turnstile script failed to load')), { once: true })
+      return
+    }
+    const script = document.createElement('script')
+    script.id = TURNSTILE_SCRIPT_ID
+    script.src = TURNSTILE_SCRIPT_SRC
+    script.async = true
+    script.defer = true
+    script.addEventListener('load', () => resolve(), { once: true })
+    script.addEventListener('error', () => reject(new Error('turnstile script failed to load')), { once: true })
+    document.head.appendChild(script)
+  })
+}
+
+function renderTurnstile() {
+  if (!turnstileEl.value || !window.turnstile) return
+  turnstileWidgetId = window.turnstile.render(turnstileEl.value, {
+    sitekey: turnstileSiteKey,
+    size: 'flexible',
+    callback: (token) => {
+      turnstileToken.value = token
+    },
+    'expired-callback': () => {
+      turnstileToken.value = ''
+    },
+    'error-callback': () => {
+      turnstileToken.value = ''
+    }
+  })
+}
+
+function resetTurnstile() {
+  turnstileToken.value = ''
+  if (window.turnstile && turnstileWidgetId != null) {
+    window.turnstile.reset(turnstileWidgetId)
+  }
+}
+
+onMounted(async () => {
+  if (!turnstileSiteKey || !import.meta.client) return
+  try {
+    await loadTurnstileScript()
+    renderTurnstile()
+  } catch (err) {
+    console.error('[contact] Turnstile failed to load:', err?.message)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (window.turnstile && turnstileWidgetId != null) {
+    window.turnstile.remove(turnstileWidgetId)
+  }
+})
 
 // Deep-link support: /contact?subject=custom preselects "Custom / bespoke design".
 const initialSubject =
@@ -128,9 +214,14 @@ async function onSubmit() {
     return
   }
 
+  if (turnstileSiteKey && !turnstileToken.value) {
+    error.value = 'Please complete the verification challenge.'
+    return
+  }
+
   submitting.value = true
   try {
-    await $fetch('/api/inquiries', { method: 'POST', body: { ...form } })
+    await $fetch('/api/inquiries', { method: 'POST', body: { ...form, turnstileToken: turnstileToken.value } })
     sent.value = true
   } catch (err) {
     error.value =
@@ -138,6 +229,9 @@ async function onSubmit() {
       (err?.statusCode === 429
         ? 'You’ve sent a few messages already — please wait a little while before sending another.'
         : 'We couldn’t send your message right now. Please try again in a moment.')
+    // A used/expired/invalid token can't be retried as-is — reset so the
+    // widget issues a fresh one before the next attempt.
+    resetTurnstile()
   } finally {
     submitting.value = false
   }

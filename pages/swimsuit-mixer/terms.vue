@@ -1,8 +1,8 @@
 <template>
   <div class="min-h-screen bg-sand">
     <div class="section container-bm max-w-2xl !pb-28">
-      <FancyHeading eyebrow="The Bikini Mixer" title="Booking *Terms*" center>
-        The complete cancellation and refund policy for The Bikini Mixer by Bahama Mama.
+      <FancyHeading eyebrow="The Swimsuit Mixer" title="Booking *Terms*" center>
+        The complete cancellation and refund policy for The Swimsuit Mixer by Bahama Mama.
       </FancyHeading>
 
       <div class="mt-9 space-y-6 rounded-4xl bg-cream p-7 shadow-card sm:p-9">
@@ -19,9 +19,9 @@
         </section>
 
         <section class="border-t border-ink/10 pt-6">
-          <h2 class="font-display text-base font-semibold text-ink">Your Bikini Selections</h2>
+          <h2 class="font-display text-base font-semibold text-ink">Your Swimsuit Selections</h2>
           <p class="mt-3 text-sm leading-relaxed text-ink/70">
-            Your bikini pieces will be prepared based on your booking selections, so please choose carefully.
+            Your swimsuit will be prepared based on your booking selections, so please choose carefully.
             Selections are final once payment is completed. Limited swaps may be possible at the event, subject to
             availability.
           </p>
@@ -29,12 +29,12 @@
       </div>
 
       <div class="mt-8 flex justify-center">
-        <NuxtLink to="/bikini-mix" class="btn-outline">← Back to Booking</NuxtLink>
+        <NuxtLink to="/swimsuit-mixer" class="btn-outline">← Back to Booking</NuxtLink>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-useHead({ title: 'Booking Terms — The Bikini Mixer' })
+useHead({ title: 'Booking Terms — The Swimsuit Mixer' })
 </script>

@@ -7,6 +7,31 @@
 
     <p v-if="savedMessage" class="mt-4 rounded-2xl bg-shell/60 px-4 py-3 text-sm text-ink/70">{{ savedMessage }}</p>
 
+    <!-- bulk-selection action bar — appears only while something is selected -->
+    <AdminBulkActionBar :count="selectedCount" @clear="clearSelection">
+      <button
+        type="button"
+        class="rounded-full border border-cream/30 px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10"
+        @click="openBulkStatusConfirm(true)"
+      >
+        Activate Selected
+      </button>
+      <button
+        type="button"
+        class="rounded-full border border-cream/30 px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10"
+        @click="openBulkStatusConfirm(false)"
+      >
+        Deactivate Selected
+      </button>
+      <button
+        type="button"
+        class="rounded-full bg-coral px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-coral/90"
+        @click="bulkDeleteConfirmOpen = true"
+      >
+        Delete Selected
+      </button>
+    </AdminBulkActionBar>
+
     <p v-if="pending && !data" class="mt-8 rounded-4xl bg-cream p-7 text-sm text-ink/50 shadow-card">Loading products…</p>
 
     <div v-else-if="loadError" class="mt-8 rounded-4xl bg-cream p-7 text-center shadow-card">
@@ -51,6 +76,16 @@
         <table class="w-full min-w-[52rem] text-left text-sm">
           <thead>
             <tr class="border-b border-ink/10 text-xs font-semibold uppercase tracking-widest2 text-ink/50">
+              <th class="w-10 px-5 py-4">
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-ink/30 text-coral focus:ring-coral"
+                  :checked="allSelected"
+                  :indeterminate="indeterminate"
+                  aria-label="Select all displayed products"
+                  @change="toggleAll"
+                />
+              </th>
               <th class="px-5 py-4">Product</th>
               <th class="px-5 py-4">Category</th>
               <th class="px-5 py-4">USD</th>
@@ -70,6 +105,16 @@
               @click="rowActivate($event, () => openEdit(p))"
               @keydown="rowKeydown($event, () => openEdit(p))"
             >
+              <td class="px-5 py-4">
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-ink/30 text-coral focus:ring-coral"
+                  :checked="selectedIds.has(p.id)"
+                  :aria-label="`Select ${p.name}`"
+                  @click.stop
+                  @change="toggleSelected(p.id)"
+                />
+              </td>
               <td class="px-5 py-4">
                 <div class="flex items-center gap-3">
                   <span class="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-ink/10 bg-sand/40">
@@ -141,11 +186,56 @@
         </div>
       </div>
     </div>
+
+    <!-- bulk activate / deactivate confirm -->
+    <div
+      v-if="bulkStatusConfirmOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6 backdrop-blur-sm"
+      @click.self="closeBulkStatusConfirm"
+    >
+      <div class="w-full max-w-sm rounded-4xl bg-cream p-7 shadow-card">
+        <h2 class="font-display text-lg font-semibold text-ink">
+          {{ bulkTargetActive ? 'Activate' : 'Deactivate' }} {{ selectedCount }} product{{ selectedCount === 1 ? '' : 's' }}?
+        </h2>
+        <p class="mt-2 text-sm text-ink/60">
+          {{ bulkTargetActive ? 'They’ll be available to customers again.' : 'They’ll stop appearing for customers until reactivated. Nothing is deleted.' }}
+        </p>
+        <p v-if="bulkStatusError" class="mt-3 text-sm text-coral">{{ bulkStatusError }}</p>
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <button type="button" class="btn-outline" :disabled="bulkStatusUpdating" @click="closeBulkStatusConfirm">Cancel</button>
+          <button
+            type="button"
+            class="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="bulkStatusUpdating"
+            @click="doBulkStatusUpdate"
+          >
+            {{ bulkStatusUpdating ? 'Working…' : bulkTargetActive ? 'Activate' : 'Deactivate' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- bulk delete confirm -->
+    <AdminBulkDeleteConfirmModal
+      :open="bulkDeleteConfirmOpen"
+      :count="selectedCount"
+      :busy="bulkDeleting"
+      :error="bulkDeleteError"
+      singular-noun="product"
+      plural-noun="products"
+      @confirm="doBulkDelete"
+      @cancel="bulkDeleteConfirmOpen = false"
+    >
+      <template #description>
+        The Test Product and anything referenced by a stockist’s inventory will be skipped and kept — deactivate
+        those instead. Existing customer orders are never affected. This can’t be undone for anything that is deleted.
+      </template>
+    </AdminBulkDeleteConfirmModal>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { formatUsd } from '~/utils/money'
 import { CATEGORIES } from '~/data/constants.js'
 import { rowActivate, rowKeydown } from '~/utils/adminRowClick.js'
@@ -195,6 +285,13 @@ function clearFilters() {
   search.value = ''
   activeCategory.value = 'all'
 }
+
+// ── bulk selection — scoped to whatever rows are CURRENTLY displayed
+// (i.e. `filtered`, not the full unfiltered `products`) — cleared below
+// whenever the filters change.
+const { selectedIds, selectedCount, toggle: toggleSelected, clear: clearSelection, remove: removeFromSelection, allSelected, indeterminate, toggleAll } =
+  useAdminBulkSelection(filtered)
+watch([search, activeCategory], () => clearSelection())
 
 // ── create / edit ──
 const formOpen = ref(false)
@@ -250,6 +347,7 @@ async function doDelete() {
   try {
     await authedFetch(`/api/admin/products/${deleteTarget.value.id}`, { method: 'DELETE' })
     const name = deleteTarget.value.name
+    removeFromSelection(deleteTarget.value.id)
     deleteTarget.value = null
     await refresh()
     flash(`“${name}” was permanently deleted.`)
@@ -257,6 +355,72 @@ async function doDelete() {
     deleteError.value = err?.data?.error || 'Could not delete this product. Please try again.'
   } finally {
     deleting.value = false
+  }
+}
+
+function summarizeSkips(skipped) {
+  if (!skipped?.length) return ''
+  const reasons = [...new Set(skipped.map((s) => s.reason))]
+  return ` ${skipped.length} skipped (${reasons.join('; ')}).`
+}
+
+// ── bulk activate / deactivate ──────────────────────────────────────────────
+const bulkStatusConfirmOpen = ref(false)
+const bulkTargetActive = ref(true)
+const bulkStatusUpdating = ref(false)
+const bulkStatusError = ref('')
+
+function openBulkStatusConfirm(targetActive) {
+  if (selectedCount.value === 0) return
+  bulkTargetActive.value = targetActive
+  bulkStatusError.value = ''
+  bulkStatusConfirmOpen.value = true
+}
+function closeBulkStatusConfirm() {
+  if (bulkStatusUpdating.value) return
+  bulkStatusConfirmOpen.value = false
+}
+async function doBulkStatusUpdate() {
+  if (selectedCount.value === 0) return
+  bulkStatusUpdating.value = true
+  bulkStatusError.value = ''
+  try {
+    const ids = [...selectedIds.value]
+    const res = await authedFetch('/api/admin/products/bulk-status', {
+      method: 'POST',
+      body: { ids, isActive: bulkTargetActive.value }
+    })
+    bulkStatusConfirmOpen.value = false
+    clearSelection()
+    await refresh()
+    flash(`${bulkTargetActive.value ? 'Activated' : 'Deactivated'} ${res.updatedCount} of ${res.requestedCount} selected.`)
+  } catch (err) {
+    bulkStatusError.value = err?.data?.error || 'Could not update the selected products. Please try again.'
+  } finally {
+    bulkStatusUpdating.value = false
+  }
+}
+
+// ── bulk delete — skips the Test Product + anything stockist-referenced ────
+const bulkDeleteConfirmOpen = ref(false)
+const bulkDeleting = ref(false)
+const bulkDeleteError = ref('')
+
+async function doBulkDelete() {
+  if (selectedCount.value === 0) return
+  bulkDeleting.value = true
+  bulkDeleteError.value = ''
+  try {
+    const ids = [...selectedIds.value]
+    const res = await authedFetch('/api/admin/products/bulk-delete', { method: 'POST', body: { ids } })
+    bulkDeleteConfirmOpen.value = false
+    clearSelection()
+    await refresh()
+    flash(`Deleted ${res.deletedCount} of ${res.requestedCount} selected.${summarizeSkips(res.skipped)}`)
+  } catch (err) {
+    bulkDeleteError.value = err?.data?.error || 'Could not delete the selected products. Please try again.'
+  } finally {
+    bulkDeleting.value = false
   }
 }
 </script>

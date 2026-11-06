@@ -2,7 +2,7 @@
   <div class="min-h-screen bg-sand">
     <div class="section container-bm max-w-2xl">
       <div v-if="phase === 'waiting'" class="mx-auto max-w-md text-center">
-        <p class="eyebrow">The Bikini Mixer</p>
+        <p class="eyebrow">The Swimsuit Mixer</p>
         <h1 class="mt-2 font-display text-3xl font-semibold text-ink md:text-4xl">Confirming your payment…</h1>
         <p class="mt-4 leading-relaxed text-ink/70">
           Thanks! We're just confirming your payment with Go2Pay — this usually takes a few seconds. There's no need
@@ -11,7 +11,7 @@
       </div>
 
       <div v-else-if="phase === 'timeout'" class="mx-auto max-w-md text-center">
-        <p class="eyebrow">The Bikini Mixer</p>
+        <p class="eyebrow">The Swimsuit Mixer</p>
         <h1 class="mt-2 font-display text-3xl font-semibold text-ink md:text-4xl">Still confirming…</h1>
         <p class="mt-4 leading-relaxed text-ink/70">
           Your payment is taking a little longer than usual to confirm. You don't need to pay again — we'll email you
@@ -63,7 +63,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useBikiniMixCheckout } from '~/composables/useBikiniMixCheckout'
 
-useHead({ title: 'Payment received — The Bikini Mixer' })
+useHead({ title: 'Payment received — The Swimsuit Mixer' })
 
 const route = useRoute()
 const { readCheckoutId, clearCheckoutId } = useBikiniMixCheckout()
@@ -76,7 +76,7 @@ const bookingRef = computed(() => {
 const phase = ref('waiting') // 'waiting' | 'resolved' | 'timeout'
 const confirmed = ref(false)
 const booking = ref(null)
-const eventName = ref('The Bikini Mixer')
+const eventName = ref('The Swimsuit Mixer')
 const eventDateLabel = ref('')
 const venue = ref('')
 
@@ -125,7 +125,7 @@ async function loadConfirmation(id) {
     const res = await $fetch('/api/bikini-mix/checkout/confirmation', { params: { checkout: id } })
     if (res.found) {
       booking.value = res.booking
-      eventName.value = res.event?.eventName || 'The Bikini Mixer'
+      eventName.value = res.event?.eventName || 'The Swimsuit Mixer'
       eventDateLabel.value = formatDate(res.event?.eventDate)
       venue.value = res.event?.venue || ''
     }

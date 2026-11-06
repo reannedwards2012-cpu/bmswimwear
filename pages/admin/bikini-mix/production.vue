@@ -79,8 +79,42 @@
            purely an operational flag (base_prepared_at), never read by any
            payment/booking/capacity logic. -->
       <div v-if="data.confirmedCount" class="mt-10">
-        <h2 class="font-display text-lg font-semibold text-ink">Production Checklist</h2>
-        <p class="mt-1 text-sm text-ink/60">Check off each guest's base once it's prepared. Saved automatically.</p>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="font-display text-lg font-semibold text-ink">Production Checklist</h2>
+            <p class="mt-1 text-sm text-ink/60">Check off each guest's base once it's prepared. Saved automatically.</p>
+          </div>
+          <label class="flex shrink-0 cursor-pointer items-center gap-2 text-xs font-semibold text-ink/60">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-ink/30 text-coral focus:ring-coral"
+              :checked="allSelected"
+              :indeterminate="indeterminate"
+              aria-label="Select all checklist entries"
+              @change="toggleAll"
+            />
+            Select all
+          </label>
+        </div>
+
+        <!-- bulk-selection action bar — appears only while something is selected -->
+        <AdminBulkActionBar :count="selectedCount" @clear="clearSelection">
+          <button
+            type="button"
+            class="rounded-full border border-cream/30 px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10"
+            @click="openBulkPreparedConfirm(false)"
+          >
+            Mark Not Prepared
+          </button>
+          <button
+            type="button"
+            class="rounded-full bg-coral px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-coral/90"
+            @click="openBulkPreparedConfirm(true)"
+          >
+            Mark Prepared
+          </button>
+        </AdminBulkActionBar>
+        <p v-if="bulkResultMessage" class="mt-4 rounded-2xl bg-shell/60 px-4 py-3 text-sm text-ink/70">{{ bulkResultMessage }}</p>
 
         <div class="mt-4 space-y-3">
           <section
@@ -90,9 +124,18 @@
             :class="row.basePreparedAt ? 'ring-2 ring-emerald-400/60' : ''"
           >
             <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p class="font-semibold text-ink">{{ row.bookingNumber }} — {{ row.fullName }}</p>
-                <p class="text-xs text-ink/50">{{ row.garmentType === 'onepiece' ? 'One-Piece' : 'Bikini' }} · {{ row.ticketTier }}</p>
+              <div class="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  class="mt-1 h-4 w-4 shrink-0 rounded border-ink/30 text-coral focus:ring-coral"
+                  :checked="selectedIds.has(row.id)"
+                  :aria-label="`Select ${row.bookingNumber}`"
+                  @change="toggleSelected(row.id)"
+                />
+                <div>
+                  <p class="font-semibold text-ink">{{ row.bookingNumber }} — {{ row.fullName }}</p>
+                  <p class="text-xs text-ink/50">{{ row.garmentType === 'onepiece' ? 'One-Piece' : 'Bikini' }} · {{ row.ticketTier }}</p>
+                </div>
               </div>
               <label class="flex shrink-0 cursor-pointer items-center gap-2 text-xs font-semibold text-ink/60">
                 <input
@@ -124,11 +167,40 @@
         </div>
       </div>
     </template>
+
+    <!-- bulk prepared / not-prepared confirm -->
+    <div
+      v-if="bulkPreparedConfirmOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6 backdrop-blur-sm"
+      @click.self="closeBulkPreparedConfirm"
+    >
+      <div class="w-full max-w-sm rounded-4xl bg-cream p-7 shadow-card">
+        <h2 class="font-display text-lg font-semibold text-ink">
+          {{ bulkPreparedTarget ? 'Mark' : 'Unmark' }} {{ selectedCount }} entr{{ selectedCount === 1 ? 'y' : 'ies' }}
+          {{ bulkPreparedTarget ? 'prepared' : 'as not prepared' }}?
+        </h2>
+        <p class="mt-2 text-sm text-ink/60">
+          This only updates the production checklist flag — nothing about payment, booking status, or guest details changes.
+        </p>
+        <p v-if="bulkPreparedError" class="mt-3 text-sm text-coral">{{ bulkPreparedError }}</p>
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <button type="button" class="btn-outline" :disabled="bulkPreparedUpdating" @click="closeBulkPreparedConfirm">Cancel</button>
+          <button
+            type="button"
+            class="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="bulkPreparedUpdating"
+            @click="doBulkPrepared"
+          >
+            {{ bulkPreparedUpdating ? 'Working…' : 'Confirm' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { mockProductionSummary } from '~/data/bikiniMixAdminMock.js'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
@@ -191,7 +263,74 @@ async function exportCsv() {
   }
 }
 
-// ── Production Checklist: "prepared" toggle ─────────────────────────────
+// ── bulk selection — scoped to the checklist rows currently shown. Every
+// row here is already a confirmed booking (the only kind this checklist
+// ever lists), so the bulk endpoint's "only confirmed" guard is always
+// satisfied in practice — kept server-side anyway as the real guarantee.
+const checklistRows = computed(() => data.value?.bookings ?? [])
+const { selectedIds, selectedCount, toggle: toggleSelected, clear: clearSelection, allSelected, indeterminate, toggleAll } =
+  useAdminBulkSelection(checklistRows)
+
+const bulkResultMessage = ref('')
+let bulkResultTimer = null
+function flashBulkResult(msg) {
+  clearTimeout(bulkResultTimer)
+  bulkResultMessage.value = msg
+  bulkResultTimer = setTimeout(() => (bulkResultMessage.value = ''), 6000)
+}
+
+const bulkPreparedConfirmOpen = ref(false)
+const bulkPreparedTarget = ref(true)
+const bulkPreparedUpdating = ref(false)
+const bulkPreparedError = ref('')
+
+function openBulkPreparedConfirm(target) {
+  if (selectedCount.value === 0) return
+  bulkPreparedTarget.value = target
+  bulkPreparedError.value = ''
+  bulkPreparedConfirmOpen.value = true
+}
+function closeBulkPreparedConfirm() {
+  if (bulkPreparedUpdating.value) return
+  bulkPreparedConfirmOpen.value = false
+}
+async function doBulkPrepared() {
+  if (selectedCount.value === 0) return
+  bulkPreparedUpdating.value = true
+  bulkPreparedError.value = ''
+  const ids = [...selectedIds.value]
+  const target = bulkPreparedTarget.value
+
+  // Preview mode: optimistic local update only — no real booking rows to PATCH.
+  if (previewMode.value) {
+    for (const row of checklistRows.value) {
+      if (ids.includes(row.id)) row.basePreparedAt = target ? new Date().toISOString() : null
+    }
+    bulkPreparedConfirmOpen.value = false
+    clearSelection()
+    bulkPreparedUpdating.value = false
+    flashBulkResult(`${target ? 'Marked' : 'Unmarked'} ${ids.length} as prepared.`)
+    return
+  }
+
+  try {
+    const res = await authedFetch('/api/admin/bikini-mix/bookings/bulk-prepared', {
+      method: 'POST',
+      body: { ids, prepared: target }
+    })
+    bulkPreparedConfirmOpen.value = false
+    clearSelection()
+    await refresh()
+    const skippedNote = res.skipped?.length ? ` ${res.skipped.length} skipped (not confirmed).` : ''
+    flashBulkResult(`${target ? 'Marked' : 'Unmarked'} ${res.updatedCount} of ${res.requestedCount}.${skippedNote}`)
+  } catch (err) {
+    bulkPreparedError.value = err?.data?.error || 'Could not update the selected entries. Please try again.'
+  } finally {
+    bulkPreparedUpdating.value = false
+  }
+}
+
+// ── Production Checklist: per-row "prepared" toggle ─────────────────────
 const togglingId = ref(null)
 const prepareError = reactive({})
 

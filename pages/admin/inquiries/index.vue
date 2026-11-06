@@ -20,6 +20,19 @@
       <AdminFilterSelect label="Status" v-model="activeFilter" :options="statusOptions" class="sm:w-52" />
     </div>
 
+    <!-- bulk-selection action bar — appears only while something is selected -->
+    <AdminBulkActionBar :count="selectedCount" @clear="clearSelection">
+      <button
+        type="button"
+        class="rounded-full bg-coral px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-coral/90"
+        @click="openBulkDeleteConfirm"
+      >
+        Delete Selected
+      </button>
+    </AdminBulkActionBar>
+
+    <p v-if="bulkResultMessage" class="mt-4 rounded-2xl bg-shell/60 px-4 py-3 text-sm text-ink/70">{{ bulkResultMessage }}</p>
+
     <p v-if="pending && !data" class="mt-8 rounded-4xl bg-cream p-7 text-sm text-ink/50 shadow-card">Loading inquiries…</p>
 
     <div v-else-if="loadError" class="mt-8 rounded-4xl bg-cream p-7 text-center shadow-card">
@@ -41,6 +54,16 @@
           <table class="w-full min-w-[56rem] text-left text-sm">
             <thead>
               <tr class="border-b border-ink/10 text-xs font-semibold uppercase tracking-widest2 text-ink/50">
+                <th class="w-10 px-5 py-4">
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-ink/30 text-coral focus:ring-coral"
+                    :checked="allSelected"
+                    :indeterminate="indeterminate"
+                    aria-label="Select all displayed inquiries"
+                    @change="toggleAll"
+                  />
+                </th>
                 <th class="px-5 py-4">From</th>
                 <th class="px-5 py-4">Subject</th>
                 <th class="px-5 py-4">Message</th>
@@ -61,6 +84,16 @@
                 @click="rowActivate($event, () => openInquiry(q))"
                 @keydown="rowKeydown($event, () => openInquiry(q))"
               >
+                <td class="px-5 py-4">
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-ink/30 text-coral focus:ring-coral"
+                    :checked="selectedIds.has(q.id)"
+                    :aria-label="`Select inquiry from ${fullName(q)}`"
+                    @click.stop
+                    @change="toggleSelected(q.id)"
+                  />
+                </td>
                 <td class="px-5 py-4">
                   <p class="font-medium text-ink" :class="q.status === 'new' ? 'font-semibold' : ''">{{ fullName(q) }}</p>
                   <p class="text-xs text-ink/40">{{ q.email }}</p>
@@ -102,9 +135,19 @@
             @keydown="rowKeydown($event, () => openInquiry(q))"
           >
             <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <p class="font-display text-base font-semibold text-ink">{{ fullName(q) }}</p>
-                <p class="truncate text-xs text-ink/45">{{ q.email }}</p>
+              <div class="flex min-w-0 items-start gap-3">
+                <input
+                  type="checkbox"
+                  class="mt-1 h-4 w-4 shrink-0 rounded border-ink/30 text-coral focus:ring-coral"
+                  :checked="selectedIds.has(q.id)"
+                  :aria-label="`Select inquiry from ${fullName(q)}`"
+                  @click.stop
+                  @change="toggleSelected(q.id)"
+                />
+                <div class="min-w-0">
+                  <p class="font-display text-base font-semibold text-ink">{{ fullName(q) }}</p>
+                  <p class="truncate text-xs text-ink/45">{{ q.email }}</p>
+                </div>
               </div>
               <AdminInquiryStatusBadge :status="q.status" class="shrink-0" />
             </div>
@@ -160,6 +203,18 @@
         </div>
       </div>
     </div>
+
+    <!-- bulk hard-delete confirm -->
+    <AdminBulkDeleteConfirmModal
+      :open="bulkConfirmOpen"
+      :count="selectedCount"
+      :busy="bulkDeleting"
+      :error="bulkDeleteError"
+      singular-noun="inquiry"
+      plural-noun="inquiries"
+      @confirm="doBulkDelete"
+      @cancel="closeBulkDeleteConfirm"
+    />
   </div>
 </template>
 
@@ -236,9 +291,25 @@ const extraPages = ref([])
 const loadingMore = ref(false)
 watch([activeFilter, search], () => {
   extraPages.value = []
+  clearSelection()
 })
 
 const inquiries = computed(() => [...(data.value?.inquiries ?? []), ...extraPages.value.flat()])
+
+// ── bulk selection — scoped to whatever rows are CURRENTLY displayed ───────
+// (the full flattened `inquiries` list, including anything pulled in via
+// "Load more") — never an implicit "select every row matching this filter".
+// Cleared whenever filters/search change (see the watcher above).
+const {
+  selectedIds,
+  selectedCount,
+  toggle: toggleSelected,
+  clear: clearSelection,
+  remove: removeFromSelection,
+  allSelected,
+  indeterminate,
+  toggleAll
+} = useAdminBulkSelection(inquiries)
 
 async function loadMore() {
   const all = inquiries.value
@@ -297,6 +368,7 @@ async function doDelete() {
   deleteError.value = ''
   try {
     await authedFetch(`/api/admin/inquiries/${deleteTarget.value.id}`, { method: 'DELETE' })
+    removeFromSelection(deleteTarget.value.id)
     deleteTarget.value = null
     extraPages.value = []
     await refresh()
@@ -304,6 +376,53 @@ async function doDelete() {
     deleteError.value = err?.data?.error || 'Could not delete this inquiry. Please try again.'
   } finally {
     deleting.value = false
+  }
+}
+
+// ── bulk delete — new /bulk-delete endpoint, explicit-selection only ───────
+const bulkConfirmOpen = ref(false)
+const bulkDeleting = ref(false)
+const bulkDeleteError = ref('')
+const bulkResultMessage = ref('')
+let bulkResultTimer = null
+
+function flashBulkResult(msg) {
+  clearTimeout(bulkResultTimer)
+  bulkResultMessage.value = msg
+  bulkResultTimer = setTimeout(() => (bulkResultMessage.value = ''), 6000)
+}
+
+function openBulkDeleteConfirm() {
+  if (selectedCount.value === 0) return
+  bulkDeleteError.value = ''
+  bulkConfirmOpen.value = true
+}
+
+function closeBulkDeleteConfirm() {
+  if (bulkDeleting.value) return
+  bulkConfirmOpen.value = false
+}
+
+async function doBulkDelete() {
+  if (selectedCount.value === 0) return
+  bulkDeleting.value = true
+  bulkDeleteError.value = ''
+  try {
+    const ids = [...selectedIds.value]
+    const res = await authedFetch('/api/admin/inquiries/bulk-delete', { method: 'POST', body: { ids } })
+    bulkConfirmOpen.value = false
+    clearSelection()
+    extraPages.value = []
+    await refresh()
+    flashBulkResult(
+      res.deletedCount < res.requestedCount
+        ? `Deleted ${res.deletedCount} of ${res.requestedCount} selected (some may have already been removed).`
+        : `Deleted ${res.deletedCount} inquir${res.deletedCount === 1 ? 'y' : 'ies'}.`
+    )
+  } catch (err) {
+    bulkDeleteError.value = err?.data?.error || 'Could not delete the selected inquiries. Please try again.'
+  } finally {
+    bulkDeleting.value = false
   }
 }
 

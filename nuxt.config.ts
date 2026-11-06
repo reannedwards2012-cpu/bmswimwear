@@ -5,6 +5,16 @@ export default defineNuxtConfig({
     appManifest: false
   },
 
+  // The Bikini Mix booking event was renamed to "The Swimsuit Mixer" and its
+  // public URL moved from /bikini-mix to /swimsuit-mixer. Permanent redirect
+  // so any previously shared /bikini-mix link (social posts, old emails,
+  // bookmarks) keeps working indefinitely. Backend routes (/api/bikini-mix/*,
+  // /admin/bikini-mix/*) are intentionally unchanged and NOT redirected.
+  routeRules: {
+    '/bikini-mix': { redirect: { to: '/swimsuit-mixer', statusCode: 301 } },
+    '/bikini-mix/**': { redirect: { to: '/swimsuit-mixer/**', statusCode: 301 } }
+  },
+
   // Browser-safe Supabase config for Auth (publishable key only — NEVER the
   // secret key, which stays server-only in server/utils/supabaseAdmin.js).
   // Values are inlined from Netlify build env; override at runtime with
@@ -12,7 +22,11 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       supabaseUrl: process.env.SUPABASE_URL || '',
-      supabaseKey: process.env.SUPABASE_PUBLISHABLE_KEY || ''
+      supabaseKey: process.env.SUPABASE_PUBLISHABLE_KEY || '',
+      // Turnstile SITE keys are designed by Cloudflare to be public (embedded
+      // in page HTML) — only TURNSTILE_SECRET_KEY (server/utils/turnstile.js)
+      // is sensitive, and it is read from process.env directly, never here.
+      turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || ''
     }
   },
 

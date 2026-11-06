@@ -222,7 +222,7 @@ function formatMeasurement(v) {
 }
 
 useHead(() => ({
-  title: booking.value ? `${booking.value.bookingNumber} — Bikini Mix — Admin — Bahama Mama Swimwear` : 'Booking — Admin — Bahama Mama Swimwear',
+  title: booking.value ? `${booking.value.bookingNumber} — Swimsuit Mixer — Admin — Bahama Mama Swimwear` : 'Booking — Admin — Bahama Mama Swimwear',
   meta: [{ name: 'robots', content: 'noindex' }]
 }))
 

@@ -7,22 +7,31 @@
  * value.
  *
  * Abuse protection, in order:
- *   1. Honeypot  — a filled hidden field => fake success, store nothing.
- *   2. Rate limit — hashed-IP (only if INQUIRY_HASH_SECRET is set) + per-email,
+ *   1. Honeypot    — a filled hidden field => fake success, store nothing.
+ *   2. Validation  — cheap, local; a malformed payload never reaches Cloudflare.
+ *   3. Turnstile   — server-side token verification (server/utils/turnstile.js).
+ *      Missing/invalid/expired token, a failed verify request, or a
+ *      missing/invalid secret key all => 400, nothing stored, no email
+ *      sent. In production (the default — see that file's header) a
+ *      missing secret key REJECTS rather than skipping; the fail-open dev
+ *      convenience only applies when NODE_ENV is explicitly development/test.
+ *   4. Rate limit  — hashed-IP (only if INQUIRY_HASH_SECRET is set) + per-email,
  *      both DB-backed (serverless-safe). Over the limit => 429.
- *   3. Server-side validation + sanitisation + hard length caps.
  *
  * No raw IP / user-agent is stored.
  *
  * After a successful store, two best-effort emails go out via Brevo (customer
- * acknowledgment + admin notification). They are NEVER sent for a honeypot or
- * rejected submission, and a mail failure is logged but never changes the
- * `{ ok: true }` response — the inquiry is already saved.
+ * acknowledgment + admin notification). They are NEVER sent for a honeypot,
+ * failed-verification, or otherwise rejected submission, and a mail failure
+ * is logged but never changes the `{ ok: true }` response — the inquiry is
+ * already saved.
  *
- * Isolated: touches only `inquiries` + `inquiry_rate_hits` (+ outbound Brevo).
+ * Isolated: touches only `inquiries` + `inquiry_rate_hits` (+ outbound Brevo
+ * + the outbound Cloudflare siteverify call).
  */
 import { supabaseAdmin } from '../utils/supabaseAdmin.js'
 import { validateInquiry, isHoneypotTripped } from '../utils/inquiryValidation.js'
+import { verifyTurnstileToken } from '../utils/turnstile.js'
 import {
   resolveClientIp,
   ipHash,
@@ -32,6 +41,7 @@ import {
 import { sendInquiryEmails } from '../utils/inquiryEmails.js'
 
 const GENERIC_ERROR = 'We couldn’t send your message right now. Please try again in a moment.'
+const VERIFICATION_ERROR = 'We couldn’t verify you’re human — please try again.'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event).catch(() => null)
@@ -41,8 +51,9 @@ export default defineEventHandler(async (event) => {
     return { ok: true }
   }
 
-  // 2. Validate up-front so a bad email never even reaches the rate check
-  //    with a usable key (and so obviously-malformed spam is a cheap 400).
+  // 2. Validate up-front so a bad email never even reaches Cloudflare or the
+  //    rate check with a usable key (and so obviously-malformed spam is a
+  //    cheap 400 that never leaves this process).
   const result = validateInquiry(body)
   if (!result.ok) {
     setResponseStatus(event, 400)
@@ -50,11 +61,20 @@ export default defineEventHandler(async (event) => {
   }
   const fields = result.fields
 
+  const clientIp = resolveClientIp(event)
+
+  // 3. Turnstile — verified before anything is stored or sent.
+  const turnstileResult = await verifyTurnstileToken(body?.turnstileToken, clientIp)
+  if (!turnstileResult.ok) {
+    setResponseStatus(event, 400)
+    return { ok: false, error: VERIFICATION_ERROR, reason: turnstileResult.reason }
+  }
+
   try {
     const supabase = supabaseAdmin()
 
-    // 3. Rate limit (DB-backed).
-    const ipHashValue = ipHash(resolveClientIp(event))
+    // 4. Rate limit (DB-backed).
+    const ipHashValue = ipHash(clientIp)
     const gate = await checkInquiryRateLimit(supabase, { ipHashValue, email: fields.email })
     if (!gate.ok) {
       setResponseStatus(event, 429)
@@ -62,7 +82,7 @@ export default defineEventHandler(async (event) => {
       return { ok: false, error: 'You’ve sent a few messages already — please wait a little while before sending another.' }
     }
 
-    // 4. Store. `id` is captured server-side for the admin email only — it is
+    // 5. Store. `id` is captured server-side for the admin email only — it is
     //    never added to the response (still `{ ok: true }` and nothing else).
     const { data: inserted, error: insertError } = await supabase
       .from('inquiries')
@@ -84,10 +104,10 @@ export default defineEventHandler(async (event) => {
       return { ok: false, error: GENERIC_ERROR }
     }
 
-    // 5. Record the accepted submission for the IP signal (best-effort).
+    // 6. Record the accepted submission for the IP signal (best-effort).
     await recordInquiryRateHit(supabase, ipHashValue)
 
-    // 6. Notify — best-effort, never gates the response. The inquiry is stored;
+    // 7. Notify — best-effort, never gates the response. The inquiry is stored;
     //    a Brevo failure is logged inside and swallowed here.
     await sendInquiryEmails({
       id: inserted?.id,

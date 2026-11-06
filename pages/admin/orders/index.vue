@@ -29,6 +29,47 @@
       </div>
     </div>
 
+    <!-- bulk-selection action bar — appears only while something is selected -->
+    <AdminBulkActionBar :count="selectedCount" @clear="clearSelection">
+      <template v-if="!archivedView">
+        <div class="flex items-center gap-2">
+          <select
+            v-model="bulkTargetStatus"
+            class="rounded-full border border-cream/30 bg-ink px-3 py-2 text-xs font-semibold text-cream focus:border-cream/60 focus:outline-none"
+          >
+            <option value="" disabled>Move to…</option>
+            <option v-for="s in BULK_STATUS_TARGETS" :key="s" :value="s">{{ statusLabel(s) }}</option>
+          </select>
+          <button
+            type="button"
+            class="rounded-full border border-cream/30 px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="!bulkTargetStatus"
+            @click="openBulkStatusConfirm"
+          >
+            Update Status
+          </button>
+        </div>
+        <button
+          type="button"
+          class="rounded-full bg-coral px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-coral/90"
+          @click="openBulkArchiveConfirm(true)"
+        >
+          Archive Selected
+        </button>
+      </template>
+      <template v-else>
+        <button
+          type="button"
+          class="rounded-full bg-coral px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-coral/90"
+          @click="openBulkArchiveConfirm(false)"
+        >
+          Restore Selected
+        </button>
+      </template>
+    </AdminBulkActionBar>
+
+    <p v-if="bulkResultMessage" class="mt-4 rounded-2xl bg-shell/60 px-4 py-3 text-sm text-ink/70">{{ bulkResultMessage }}</p>
+
     <p v-if="pending && !data" class="mt-8 rounded-4xl bg-cream p-7 text-sm text-ink/50 shadow-card">Loading orders…</p>
 
     <div v-else-if="loadError" class="mt-8 rounded-4xl bg-cream p-7 text-center shadow-card">
@@ -53,6 +94,16 @@
           <table class="w-full min-w-[58rem] text-left text-sm">
             <thead>
               <tr class="border-b border-ink/10 text-xs font-semibold uppercase tracking-widest2 text-ink/50">
+                <th class="w-10 px-5 py-4">
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-ink/30 text-coral focus:ring-coral"
+                    :checked="allSelected"
+                    :indeterminate="indeterminate"
+                    aria-label="Select all displayed orders"
+                    @change="toggleAll"
+                  />
+                </th>
                 <th class="px-5 py-4">Order #</th>
                 <th class="px-5 py-4">Source</th>
                 <th class="px-5 py-4">Date</th>
@@ -73,6 +124,16 @@
                 @click="rowActivate($event, () => openOrder(o))"
                 @keydown="rowKeydown($event, () => openOrder(o))"
               >
+                <td class="px-5 py-4">
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-ink/30 text-coral focus:ring-coral"
+                    :checked="selectedIds.has(o.id)"
+                    :aria-label="`Select order ${o.orderNumber}`"
+                    @click.stop
+                    @change="toggleSelected(o.id)"
+                  />
+                </td>
                 <td class="px-5 py-4 font-medium text-ink">{{ o.orderNumber }}</td>
                 <td class="px-5 py-4"><SourceBadge :source="o.source" /></td>
                 <td class="px-5 py-4 text-ink/70">{{ formatDate(o.createdAt) }}</td>
@@ -120,11 +181,21 @@
             @keydown="rowKeydown($event, () => openOrder(o))"
           >
             <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="font-display text-base font-semibold text-ink">{{ o.orderNumber }}</p>
-                <div class="mt-1 flex items-center gap-2">
-                  <SourceBadge :source="o.source" />
-                  <span class="text-xs text-ink/45">{{ formatDate(o.createdAt) }}</span>
+              <div class="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  class="mt-1 h-4 w-4 shrink-0 rounded border-ink/30 text-coral focus:ring-coral"
+                  :checked="selectedIds.has(o.id)"
+                  :aria-label="`Select order ${o.orderNumber}`"
+                  @click.stop
+                  @change="toggleSelected(o.id)"
+                />
+                <div>
+                  <p class="font-display text-base font-semibold text-ink">{{ o.orderNumber }}</p>
+                  <div class="mt-1 flex items-center gap-2">
+                    <SourceBadge :source="o.source" />
+                    <span class="text-xs text-ink/45">{{ formatDate(o.createdAt) }}</span>
+                  </div>
                 </div>
               </div>
               <span class="shrink-0 rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(o.status)">
@@ -207,6 +278,64 @@
             @click="doArchive"
           >
             {{ archiving ? 'Archiving…' : 'Archive order' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- bulk archive / restore confirm (reversible) -->
+    <div
+      v-if="bulkArchiveConfirmOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6 backdrop-blur-sm"
+      @click.self="closeBulkArchiveConfirm"
+    >
+      <div class="w-full max-w-sm rounded-4xl bg-cream p-7 shadow-card">
+        <h2 class="font-display text-lg font-semibold text-ink">
+          {{ bulkArchiveTarget ? 'Archive' : 'Restore' }} {{ selectedCount }} order{{ selectedCount === 1 ? '' : 's' }}?
+        </h2>
+        <p class="mt-2 text-sm text-ink/60">
+          Only website orders can be archived — manual orders in your selection will be skipped and reported.
+          {{ bulkArchiveTarget ? 'Archiving moves orders out of the working list; nothing about them changes, and you can restore them any time.' : 'Restoring brings them back into the working list.' }}
+        </p>
+        <p v-if="bulkArchiveError" class="mt-3 text-sm text-coral">{{ bulkArchiveError }}</p>
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <button type="button" class="btn-outline" :disabled="bulkArchiving" @click="closeBulkArchiveConfirm">Cancel</button>
+          <button
+            type="button"
+            class="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="bulkArchiving"
+            @click="doBulkArchive"
+          >
+            {{ bulkArchiving ? 'Working…' : bulkArchiveTarget ? 'Archive' : 'Restore' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- bulk status update confirm -->
+    <div
+      v-if="bulkStatusConfirmOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6 backdrop-blur-sm"
+      @click.self="closeBulkStatusConfirm"
+    >
+      <div class="w-full max-w-sm rounded-4xl bg-cream p-7 shadow-card">
+        <h2 class="font-display text-lg font-semibold text-ink">
+          Move {{ selectedCount }} order{{ selectedCount === 1 ? '' : 's' }} to “{{ statusLabel(bulkTargetStatus) }}”?
+        </h2>
+        <p class="mt-2 text-sm text-ink/60">
+          Only orders for which this is a valid next status will be updated — anything else in your selection will be
+          skipped and reported, not forced.
+        </p>
+        <p v-if="bulkStatusError" class="mt-3 text-sm text-coral">{{ bulkStatusError }}</p>
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <button type="button" class="btn-outline" :disabled="bulkStatusUpdating" @click="closeBulkStatusConfirm">Cancel</button>
+          <button
+            type="button"
+            class="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="bulkStatusUpdating"
+            @click="doBulkStatusUpdate"
+          >
+            {{ bulkStatusUpdating ? 'Updating…' : 'Update Status' }}
           </button>
         </div>
       </div>
@@ -321,6 +450,7 @@ watch([activeFilter, period, search, sourceFilter, archivedView], () => {
   if (!archivedView.value && sourceFilter.value !== 'all') query.source = sourceFilter.value
   if (archivedView.value) query.archived = '1'
   router.replace({ query })
+  clearSelection()
 })
 
 function buildQuery() {
@@ -341,6 +471,11 @@ const { data, pending, error: loadError, refresh } = useLazyAsyncData(
 )
 
 const orders = computed(() => data.value?.orders ?? [])
+
+// ── bulk selection — scoped to whatever rows are CURRENTLY displayed ───────
+const { selectedIds, selectedCount, toggle: toggleSelected, clear: clearSelection, allSelected, indeterminate, toggleAll } =
+  useAdminBulkSelection(orders)
+
 const hasActiveFilters = computed(
   () =>
     activeFilter.value !== 'all' ||
@@ -441,6 +576,97 @@ async function doRestore(o) {
     // best-effort; the row stays and the action can be retried
   } finally {
     restoringId.value = null
+  }
+}
+
+// ── bulk result feedback — same timed-banner pattern used elsewhere in admin ──
+const bulkResultMessage = ref('')
+let bulkResultTimer = null
+function flashBulkResult(msg) {
+  clearTimeout(bulkResultTimer)
+  bulkResultMessage.value = msg
+  bulkResultTimer = setTimeout(() => (bulkResultMessage.value = ''), 6000)
+}
+function summarizeSkips(skipped) {
+  if (!skipped?.length) return ''
+  const reasons = [...new Set(skipped.map((s) => s.reason))]
+  return ` ${skipped.length} skipped (${reasons.join('; ')}).`
+}
+
+// ── bulk archive / restore — same single column write as the per-row action ──
+const bulkArchiveConfirmOpen = ref(false)
+const bulkArchiveTarget = ref(true) // true = archiving, false = restoring
+const bulkArchiving = ref(false)
+const bulkArchiveError = ref('')
+
+function openBulkArchiveConfirm(archiving) {
+  if (selectedCount.value === 0) return
+  bulkArchiveTarget.value = archiving
+  bulkArchiveError.value = ''
+  bulkArchiveConfirmOpen.value = true
+}
+function closeBulkArchiveConfirm() {
+  if (bulkArchiving.value) return
+  bulkArchiveConfirmOpen.value = false
+}
+async function doBulkArchive() {
+  if (selectedCount.value === 0) return
+  bulkArchiving.value = true
+  bulkArchiveError.value = ''
+  try {
+    const ids = [...selectedIds.value]
+    const res = await authedFetch('/api/admin/orders/bulk-archive', {
+      method: 'POST',
+      body: { ids, archived: bulkArchiveTarget.value }
+    })
+    bulkArchiveConfirmOpen.value = false
+    clearSelection()
+    await refresh()
+    const verb = bulkArchiveTarget.value ? 'Archived' : 'Restored'
+    flashBulkResult(`${verb} ${res.updatedCount} of ${res.requestedCount} selected.${summarizeSkips(res.skipped)}`)
+  } catch (err) {
+    bulkArchiveError.value = err?.data?.error || 'Could not update the selected orders. Please try again.'
+  } finally {
+    bulkArchiving.value = false
+  }
+}
+
+// ── bulk status update — 'paid' is never offered; server also hard-rejects it ──
+const BULK_STATUS_TARGETS = ['processing', 'completed', 'cancelled']
+const bulkTargetStatus = ref('')
+const bulkStatusConfirmOpen = ref(false)
+const bulkStatusUpdating = ref(false)
+const bulkStatusError = ref('')
+
+function openBulkStatusConfirm() {
+  if (selectedCount.value === 0 || !bulkTargetStatus.value) return
+  bulkStatusError.value = ''
+  bulkStatusConfirmOpen.value = true
+}
+function closeBulkStatusConfirm() {
+  if (bulkStatusUpdating.value) return
+  bulkStatusConfirmOpen.value = false
+}
+async function doBulkStatusUpdate() {
+  if (selectedCount.value === 0 || !bulkTargetStatus.value) return
+  bulkStatusUpdating.value = true
+  bulkStatusError.value = ''
+  try {
+    const ids = [...selectedIds.value]
+    const targetLabel = statusLabel(bulkTargetStatus.value)
+    const res = await authedFetch('/api/admin/orders/bulk-status', {
+      method: 'POST',
+      body: { ids, status: bulkTargetStatus.value }
+    })
+    bulkStatusConfirmOpen.value = false
+    clearSelection()
+    bulkTargetStatus.value = ''
+    await refresh()
+    flashBulkResult(`Updated ${res.updatedCount} of ${res.requestedCount} selected to “${targetLabel}”.${summarizeSkips(res.skipped)}`)
+  } catch (err) {
+    bulkStatusError.value = err?.data?.error || 'Could not update the selected orders. Please try again.'
+  } finally {
+    bulkStatusUpdating.value = false
   }
 }
 

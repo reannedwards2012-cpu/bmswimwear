@@ -246,8 +246,8 @@ export default defineEventHandler(async (event) => {
         amount: Number((chargeUsdCents / 100).toFixed(2)),
         description: `The Swimsuit Mixer booking ${bookingRef}`,
         endpoint: `${base}/api/payments/go2pay-bikini-mix/${booking.payment_callback_token}`,
-        success_url: `${base}/bikini-mix/return?b=${encodeURIComponent(bookingRef)}&checkout=${encodeURIComponent(fields.checkoutIdempotencyKey)}`,
-        error_url: `${base}/bikini-mix/cancelled`,
+        success_url: `${base}/swimsuit-mixer/return?b=${encodeURIComponent(bookingRef)}&checkout=${encodeURIComponent(fields.checkoutIdempotencyKey)}`,
+        error_url: `${base}/swimsuit-mixer/cancelled`,
         send_email: false,
         send_receipt: true
       })

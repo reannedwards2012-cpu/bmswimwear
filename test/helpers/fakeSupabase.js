@@ -34,6 +34,10 @@ export function createFakeSupabase(responses = []) {
         state.payload = p
         return api
       },
+      delete() {
+        state.op = 'delete'
+        return api
+      },
       select() {
         return api
       },
@@ -43,6 +47,10 @@ export function createFakeSupabase(responses = []) {
       },
       is(k, v) {
         state.filters.push(['is', k, v])
+        return api
+      },
+      in(k, v) {
+        state.filters.push(['in', k, v])
         return api
       },
       lt(k, v) {

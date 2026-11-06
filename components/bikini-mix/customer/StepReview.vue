@@ -133,7 +133,7 @@
         <p><strong class="text-ink">Cancellations after November 20, 2026:</strong> No refund will be issued.</p>
         <p><strong class="text-ink">Refund processing:</strong> Approved refunds will be initiated within 7 business days. The time taken for funds to appear in your account may vary depending on your bank or payment provider.</p>
       </div>
-      <NuxtLink to="/bikini-mix/terms" target="_blank" class="mt-3 inline-block text-xs font-semibold text-coral link-underline">
+      <NuxtLink to="/swimsuit-mixer/terms" target="_blank" class="mt-3 inline-block text-xs font-semibold text-coral link-underline">
         Read the complete booking terms
       </NuxtLink>
 
@@ -209,7 +209,7 @@ const props = defineProps({
   ticketInclusions: { type: Array, default: () => [] },
   policyAccepted: { type: Boolean, default: false },
   marketingOptIn: { type: Boolean, default: false },
-  // Admin-only — set by pages/bikini-mix/index.vue ONLY after a real
+  // Admin-only — set by pages/swimsuit-mixer/index.vue ONLY after a real
   // requireAdmin()-verified session confirms the current viewer is an
   // admin. Routes checkout to the admin-gated test endpoint instead of the
   // public one; never reachable by a real customer.
@@ -308,7 +308,7 @@ async function payNow() {
     const res = await submitCheckout(body)
 
     if (res.alreadyPaid) {
-      await navigateTo(`/bikini-mix/return?checkout=${encodeURIComponent(id)}`)
+      await navigateTo(`/swimsuit-mixer/return?checkout=${encodeURIComponent(id)}`)
       return
     }
     if (!res.paymentUrl) {

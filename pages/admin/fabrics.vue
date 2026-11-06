@@ -9,6 +9,33 @@
       {{ deleteSuccessMessage }}
     </p>
 
+    <!-- bulk-selection action bar — appears only while something is selected -->
+    <AdminBulkActionBar :count="selectedCount" @clear="clearSelection">
+      <button
+        type="button"
+        class="rounded-full border border-cream/30 px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10"
+        @click="openBulkDeactivateConfirm(false)"
+      >
+        Deactivate Selected
+      </button>
+      <button
+        type="button"
+        class="rounded-full border border-cream/30 px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-cream/10"
+        @click="openBulkDeactivateConfirm(true)"
+      >
+        Activate Selected
+      </button>
+      <button
+        type="button"
+        class="rounded-full bg-coral px-4 py-2 text-xs font-semibold text-cream transition-colors hover:bg-coral/90"
+        @click="bulkDeleteConfirmOpen = true"
+      >
+        Delete Selected
+      </button>
+    </AdminBulkActionBar>
+
+    <p v-if="bulkResultMessage" class="mt-4 rounded-2xl bg-shell/60 px-4 py-3 text-sm text-ink/70">{{ bulkResultMessage }}</p>
+
     <p v-if="pending" class="mt-8 rounded-4xl bg-cream p-7 text-sm text-ink/50 shadow-card">Loading fabrics…</p>
 
     <div v-else-if="loadError" class="mt-8 rounded-4xl bg-cream p-7 text-center shadow-card">
@@ -25,6 +52,16 @@
       <table class="w-full min-w-[50rem] text-left text-sm">
         <thead>
           <tr class="border-b border-ink/10 text-xs font-semibold uppercase tracking-widest2 text-ink/50">
+            <th class="w-10 px-5 py-4">
+              <input
+                type="checkbox"
+                class="h-4 w-4 rounded border-ink/30 text-coral focus:ring-coral"
+                :checked="allSelected"
+                :indeterminate="indeterminate"
+                aria-label="Select all displayed fabrics"
+                @change="toggleAll"
+              />
+            </th>
             <th class="px-5 py-4">Fabric</th>
             <th class="px-5 py-4">Type</th>
             <th class="px-5 py-4">Qty</th>
@@ -45,6 +82,16 @@
             @click="rowActivate($event, () => openEdit(f))"
             @keydown="rowKeydown($event, () => openEdit(f))"
           >
+            <td class="px-5 py-4">
+              <input
+                type="checkbox"
+                class="h-4 w-4 rounded border-ink/30 text-coral focus:ring-coral"
+                :checked="selectedIds.has(f.id)"
+                :aria-label="`Select ${f.name}`"
+                @click.stop
+                @change="toggleSelected(f.id)"
+              />
+            </td>
             <td class="px-5 py-4">
               <div class="flex items-center gap-3">
                 <img v-if="f.imageUrl" :src="f.imageUrl" :alt="f.name" class="h-8 w-8 shrink-0 rounded-full object-cover" />
@@ -127,6 +174,51 @@
         </div>
       </div>
     </div>
+
+    <!-- bulk activate / deactivate confirm -->
+    <div
+      v-if="bulkStatusConfirmOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6 backdrop-blur-sm"
+      @click.self="closeBulkStatusConfirm"
+    >
+      <div class="w-full max-w-sm rounded-4xl bg-cream p-7 shadow-card">
+        <h2 class="font-display text-lg font-semibold text-ink">
+          {{ bulkTargetActive ? 'Activate' : 'Deactivate' }} {{ selectedCount }} fabric{{ selectedCount === 1 ? '' : 's' }}?
+        </h2>
+        <p class="mt-2 text-sm text-ink/60">
+          {{ bulkTargetActive ? 'They’ll be available for use on products again.' : 'They’ll be hidden from product fabric options until reactivated. Nothing is deleted.' }}
+        </p>
+        <p v-if="bulkStatusError" class="mt-3 text-sm text-coral">{{ bulkStatusError }}</p>
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <button type="button" class="btn-outline" :disabled="bulkStatusUpdating" @click="closeBulkStatusConfirm">Cancel</button>
+          <button
+            type="button"
+            class="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="bulkStatusUpdating"
+            @click="doBulkStatusUpdate"
+          >
+            {{ bulkStatusUpdating ? 'Working…' : bulkTargetActive ? 'Activate' : 'Deactivate' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- bulk delete confirm -->
+    <AdminBulkDeleteConfirmModal
+      :open="bulkDeleteConfirmOpen"
+      :count="selectedCount"
+      :busy="bulkDeleting"
+      :error="bulkDeleteError"
+      singular-noun="fabric"
+      plural-noun="fabrics"
+      @confirm="doBulkDelete"
+      @cancel="bulkDeleteConfirmOpen = false"
+    >
+      <template #description>
+        Fabrics currently in use by a product, or referenced by a Swimsuit Mixer booking, will be skipped and kept —
+        deactivate those instead. This can’t be undone for anything that is deleted.
+      </template>
+    </AdminBulkDeleteConfirmModal>
   </div>
 </template>
 
@@ -155,6 +247,19 @@ const {
 } = useLazyAsyncData('admin-fabrics', () => authedFetch('/api/admin/fabrics'), { server: false })
 
 const fabrics = computed(() => data.value?.fabrics ?? [])
+
+// ── bulk selection — scoped to whatever rows are CURRENTLY displayed ───────
+// (no server pagination here — every fabric is loaded at once).
+const {
+  selectedIds,
+  selectedCount,
+  toggle: toggleSelected,
+  clear: clearSelection,
+  remove: removeFromSelection,
+  allSelected,
+  indeterminate,
+  toggleAll
+} = useAdminBulkSelection(fabrics)
 
 // Product-compatibility options — the live Supabase catalogue (Phase C).
 // The Test Product is excluded, matching the server-side validation. `id`
@@ -249,6 +354,7 @@ async function doDelete() {
   try {
     await authedFetch(`/api/admin/fabrics/${deleteTarget.value.id}`, { method: 'DELETE' })
     const name = deleteTarget.value.name
+    removeFromSelection(deleteTarget.value.id)
     deleteTarget.value = null
     await refresh()
 
@@ -261,6 +367,80 @@ async function doDelete() {
     deleteError.value = err?.data?.error || 'Could not delete this fabric. Please try again.'
   } finally {
     deleting.value = false
+  }
+}
+
+// ── bulk result feedback — same timed-banner pattern as single delete ──────
+const bulkResultMessage = ref('')
+let bulkResultTimer = null
+function flashBulkResult(msg) {
+  clearTimeout(bulkResultTimer)
+  bulkResultMessage.value = msg
+  bulkResultTimer = setTimeout(() => (bulkResultMessage.value = ''), 6000)
+}
+function summarizeSkips(skipped) {
+  if (!skipped?.length) return ''
+  const reasons = [...new Set(skipped.map((s) => s.reason))]
+  return ` ${skipped.length} skipped (${reasons.join('; ')}).`
+}
+
+// ── bulk activate / deactivate ──────────────────────────────────────────────
+const bulkStatusConfirmOpen = ref(false)
+const bulkTargetActive = ref(true)
+const bulkStatusUpdating = ref(false)
+const bulkStatusError = ref('')
+
+function openBulkDeactivateConfirm(targetActive) {
+  if (selectedCount.value === 0) return
+  bulkTargetActive.value = targetActive
+  bulkStatusError.value = ''
+  bulkStatusConfirmOpen.value = true
+}
+function closeBulkStatusConfirm() {
+  if (bulkStatusUpdating.value) return
+  bulkStatusConfirmOpen.value = false
+}
+async function doBulkStatusUpdate() {
+  if (selectedCount.value === 0) return
+  bulkStatusUpdating.value = true
+  bulkStatusError.value = ''
+  try {
+    const ids = [...selectedIds.value]
+    const res = await authedFetch('/api/admin/fabrics/bulk-status', {
+      method: 'POST',
+      body: { ids, isActive: bulkTargetActive.value }
+    })
+    bulkStatusConfirmOpen.value = false
+    clearSelection()
+    await refresh()
+    flashBulkResult(`${bulkTargetActive.value ? 'Activated' : 'Deactivated'} ${res.updatedCount} of ${res.requestedCount} selected.`)
+  } catch (err) {
+    bulkStatusError.value = err?.data?.error || 'Could not update the selected fabrics. Please try again.'
+  } finally {
+    bulkStatusUpdating.value = false
+  }
+}
+
+// ── bulk delete — skips anything referenced by a product or booking ────────
+const bulkDeleteConfirmOpen = ref(false)
+const bulkDeleting = ref(false)
+const bulkDeleteError = ref('')
+
+async function doBulkDelete() {
+  if (selectedCount.value === 0) return
+  bulkDeleting.value = true
+  bulkDeleteError.value = ''
+  try {
+    const ids = [...selectedIds.value]
+    const res = await authedFetch('/api/admin/fabrics/bulk-delete', { method: 'POST', body: { ids } })
+    bulkDeleteConfirmOpen.value = false
+    clearSelection()
+    await refresh()
+    flashBulkResult(`Deleted ${res.deletedCount} of ${res.requestedCount} selected.${summarizeSkips(res.skipped)}`)
+  } catch (err) {
+    bulkDeleteError.value = err?.data?.error || 'Could not delete the selected fabrics. Please try again.'
+  } finally {
+    bulkDeleting.value = false
   }
 }
 </script>
