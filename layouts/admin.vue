@@ -73,6 +73,8 @@
         <AdminSidebarFooter />
       </aside>
     </Transition>
+
+    <AdminIdleWarningModal />
   </div>
 </template>
 

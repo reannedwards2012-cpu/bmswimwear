@@ -195,10 +195,20 @@
             <span>Keep me in the loop with new drops, restocks &amp; custom order openings.</span>
           </label>
 
+          <!-- honeypot: hidden from people, tempting to bots. Real submissions leave it empty. -->
+          <div class="hidden" aria-hidden="true">
+            <label>Company
+              <input v-model="honeypot" type="text" tabindex="-1" autocomplete="off" />
+            </label>
+          </div>
+
+          <!-- Cloudflare Turnstile — only rendered when a site key is configured. -->
+          <div v-if="turnstileSiteKey" ref="turnstileEl" class="w-full" />
+
           <button
             type="submit"
             class="btn-primary w-full shadow-soft disabled:cursor-not-allowed disabled:opacity-60"
-            :disabled="submitting || orderCreated || submitBlocked"
+            :disabled="submitting || orderCreated || submitBlocked || (!!turnstileSiteKey && !turnstileToken)"
           >
             {{ submitLabel }}
           </button>
@@ -248,6 +258,9 @@ const money = formatUsd
 const submitting = ref(false)
 const orderCreated = ref(false)
 const formError = ref('')
+const honeypot = ref('') // 'company' honeypot field, submitted alongside the order
+
+const { siteKey: turnstileSiteKey, containerEl: turnstileEl, token: turnstileToken, reset: resetTurnstile } = useTurnstile()
 
 // ── live shipping quote (display only — the checkout endpoint recalculates) ──
 const quote = ref(null)
@@ -360,6 +373,10 @@ async function onSubmit() {
     formError.value = quoteError.value || 'We can’t ship to this destination automatically.'
     return
   }
+  if (turnstileSiteKey && !turnstileToken.value) {
+    formError.value = 'Please complete the verification challenge.'
+    return
+  }
 
   submitting.value = true
   try {
@@ -367,7 +384,7 @@ async function onSubmit() {
     const res = await $fetch('/api/checkout', {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: buildPayload()
+      body: { ...buildPayload(), company: honeypot.value, turnstileToken: turnstileToken.value }
     })
 
     if (res?.alreadyPaid) {
@@ -382,9 +399,13 @@ async function onSubmit() {
       return
     }
     formError.value = 'We couldn’t start payment right now. Please try again.'
+    resetTurnstile()
   } catch (err) {
     formError.value =
       err?.data?.error || 'Something went wrong placing your order. Please try again.'
+    // A used/expired/invalid token can't be retried as-is — reset so the
+    // widget issues a fresh one before the next attempt.
+    resetTurnstile()
   } finally {
     submitting.value = false
   }

@@ -55,7 +55,10 @@ function defaultDetails() {
     bust: '',
     underbust: '',
     waist: '',
-    hips: ''
+    hips: '',
+    // Honeypot — hidden from real guests, tempting to bots. See
+    // components/bikini-mix/customer/StepDetails.vue.
+    company: ''
   }
 }
 

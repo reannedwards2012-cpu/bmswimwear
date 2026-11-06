@@ -3,13 +3,25 @@ import { internationalShippingUsdCents } from '../server/utils/shipping.js'
 
 vi.mock('../server/utils/supabaseAdmin.js', () => ({ supabaseAdmin: () => ({}) }))
 vi.mock('../server/utils/productCatalogue.js', () => ({ fetchCatalogueForCheckout: vi.fn() }))
+vi.mock('../server/utils/inquiryRateLimit.js', () => ({
+  resolveClientIp: vi.fn(() => '203.0.113.5'),
+  ipHash: vi.fn(() => 'hash-203.0.113.5')
+}))
+vi.mock('../server/utils/checkoutRateLimit.js', () => ({
+  checkRateLimit: vi.fn(async () => ({ ok: true })),
+  recordRateHit: vi.fn(async () => {})
+}))
 import { fetchCatalogueForCheckout } from '../server/utils/productCatalogue.js'
+import { checkRateLimit } from '../server/utils/checkoutRateLimit.js'
 
 async function loadHandler() {
   vi.stubGlobal('defineEventHandler', (fn) => fn)
   vi.stubGlobal('readBody', async (e) => e._body)
   vi.stubGlobal('setResponseStatus', (e, s) => {
     e._status = s
+  })
+  vi.stubGlobal('setResponseHeader', (e, k, v) => {
+    e._headers = { ...(e._headers || {}), [k]: v }
   })
   vi.resetModules()
   return (await import('../server/api/checkout/quote.post.js')).default
@@ -22,6 +34,7 @@ const items = [{ productId: 'reef', quantity: 1 }]
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
   fetchCatalogueForCheckout.mockResolvedValue(CAT)
+  checkRateLimit.mockResolvedValue({ ok: true })
 })
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -73,5 +86,17 @@ describe('POST /api/checkout/quote', () => {
     )
     expect(res.ok).toBe(false)
     expect(res.code).toBe('item')
+  })
+
+  it('over the rate limit → 429, never fetches the catalogue', async () => {
+    checkRateLimit.mockResolvedValue({ ok: false, retryAfterSeconds: 300 })
+    const handler = await loadHandler()
+    const e = ev({ deliveryMethod: 'local_delivery', items })
+    const res = await handler(e)
+
+    expect(e._status).toBe(429)
+    expect(e._headers?.['Retry-After']).toBe('300')
+    expect(res).toMatchObject({ ok: false, code: 'rate_limited' })
+    expect(fetchCatalogueForCheckout).not.toHaveBeenCalled()
   })
 })

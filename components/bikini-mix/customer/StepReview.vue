@@ -177,10 +177,14 @@
     </div>
 
     <div v-else class="mt-8 flex flex-col items-center gap-2">
+      <!-- Cloudflare Turnstile — skipped entirely in preview/test mode (no real
+           checkout call either way) and when no site key is configured. -->
+      <div v-if="turnstileSiteKey && !previewMode && !testMode" ref="turnstileEl" class="w-full max-w-sm" />
+
       <button
         type="button"
         class="btn-primary w-full max-w-sm px-10 py-4 text-base shadow-soft disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="!policyAccepted || paying"
+        :disabled="!policyAccepted || paying || requiresTurnstile"
         @click="payNow"
       >
         {{ paying ? 'Starting payment…' : previewMode ? `Preview Pay ${usdLabel}` : testMode ? 'Start Test Payment (USD$1.00)' : `Pay ${usdLabel}` }}
@@ -230,6 +234,13 @@ const errorMessage = ref('')
 const priceChangeConfirm = ref(null) // { paymentUrl, retailPriceXcdCents } while awaiting Guarantee-2 confirmation
 const previewResult = ref(null) // preview-mode-only simulated outcome, see payNow()
 
+// Cloudflare Turnstile — never needed in preview/test mode, since neither
+// ever calls the real checkout endpoint.
+const { siteKey: turnstileSiteKey, containerEl: turnstileEl, token: turnstileToken, reset: resetTurnstile } = useTurnstile()
+const requiresTurnstile = computed(
+  () => !props.previewMode && !props.testMode && !!turnstileSiteKey && !turnstileToken.value
+)
+
 // Display-only price before checkout actually runs — a hint, never a
 // guarantee (the true, reservation-backed price is only known once the
 // checkout endpoint responds).
@@ -264,7 +275,9 @@ function buildCheckoutBody() {
     waistInches: props.details.waist === '' ? null : Number(props.details.waist),
     hipsInches: props.details.hips === '' ? null : Number(props.details.hips),
     marketingOptIn: props.marketingOptIn === true,
-    termsAccepted: props.policyAccepted === true
+    termsAccepted: props.policyAccepted === true,
+    company: props.details.company || '',
+    turnstileToken: turnstileToken.value
   }
 }
 
@@ -283,7 +296,7 @@ async function submitCheckout(body) {
 }
 
 async function payNow() {
-  if (!props.policyAccepted || paying.value) return
+  if (!props.policyAccepted || paying.value || requiresTurnstile.value) return
   paying.value = true
   errorMessage.value = ''
 
@@ -328,6 +341,9 @@ async function payNow() {
     window.location.href = res.paymentUrl
   } catch (err) {
     errorMessage.value = err?.data?.error || "We couldn't start payment right now. Please try again in a moment."
+    // A used/expired/invalid token can't be retried as-is — reset so the
+    // widget issues a fresh one before the next attempt.
+    resetTurnstile()
   } finally {
     paying.value = false
   }

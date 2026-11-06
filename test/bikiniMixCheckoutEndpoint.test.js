@@ -19,15 +19,38 @@ vi.mock('../server/utils/go2pay.js', () => ({
   getPaymentRequest: vi.fn()
 }))
 vi.mock('../server/utils/siteUrl.js', () => ({ siteUrl: () => 'https://bmswimwear.com' }))
+vi.mock('../server/utils/turnstile.js', () => ({ verifyTurnstileToken: vi.fn() }))
+// ipHash defaults to null ("IP hashing not configured") so every existing
+// fakeSupabase call-sequence test below is unaffected — the Phase-1 abuse
+// checks gated on a truthy ipHashValue (the early-bird slot-exhaustion guard
+// and the best-effort client_ip_hash write) simply no-op. Dedicated tests
+// for that new behaviour override ipHash per-test — see
+// test/bikiniMixCheckoutAbuseProtection.test.js. checkRateLimit/recordRateHit
+// are mocked wholesale (never touch the fake Supabase double), same
+// reasoning as test/inquiriesEndpoint.test.js.
+vi.mock('../server/utils/inquiryRateLimit.js', () => ({
+  resolveClientIp: vi.fn(() => '203.0.113.5'),
+  ipHash: vi.fn(() => null)
+}))
+vi.mock('../server/utils/checkoutRateLimit.js', () => ({
+  checkRateLimit: vi.fn(async () => ({ ok: true })),
+  recordRateHit: vi.fn(async () => {})
+}))
 
 import { supabaseAdmin } from '../server/utils/supabaseAdmin.js'
 import { createPaymentRequest, getPaymentRequest } from '../server/utils/go2pay.js'
+import { verifyTurnstileToken } from '../server/utils/turnstile.js'
+import { ipHash } from '../server/utils/inquiryRateLimit.js'
+import { checkRateLimit } from '../server/utils/checkoutRateLimit.js'
 
 function stubGlobals() {
   vi.stubGlobal('defineEventHandler', (fn) => fn)
   vi.stubGlobal('readBody', async (e) => e._body)
   vi.stubGlobal('setResponseStatus', (e, s) => {
     e._status = s
+  })
+  vi.stubGlobal('setResponseHeader', (e, k, v) => {
+    e._headers = { ...(e._headers || {}), [k]: v }
   })
 }
 
@@ -128,6 +151,9 @@ function fakeSupabase({ rpcResult, updateResults = [], onepieceEligible = true }
 
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  verifyTurnstileToken.mockReset().mockResolvedValue({ ok: true })
+  ipHash.mockReset().mockReturnValue(null)
+  checkRateLimit.mockReset().mockResolvedValue({ ok: true })
 })
 afterEach(() => {
   vi.unstubAllGlobals()

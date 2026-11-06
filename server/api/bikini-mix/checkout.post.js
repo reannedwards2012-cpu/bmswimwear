@@ -3,9 +3,18 @@ import { validateBookingCheckout } from '../../utils/bikiniMixValidation.js'
 import { xcdCentsToUsdCents } from '../../utils/shipping.js'
 import { createPaymentRequest, getPaymentRequest } from '../../utils/go2pay.js'
 import { siteUrl } from '../../utils/siteUrl.js'
+import { isHoneypotTripped } from '../../utils/inquiryValidation.js'
+import { verifyTurnstileToken } from '../../utils/turnstile.js'
+import { resolveClientIp, ipHash } from '../../utils/inquiryRateLimit.js'
+import { checkRateLimit, recordRateHit } from '../../utils/checkoutRateLimit.js'
 
 const GENERIC_ERROR = "We couldn't start your booking right now. Please try again."
 const PAYMENT_INIT_ERROR = "We couldn't start payment right now. Please try again in a moment."
+const VERIFICATION_ERROR = "We couldn't verify you're human — please try again."
+
+const RATE_SCOPE = 'bikini-mix-checkout'
+const RATE_WINDOW_MINUTES = 10
+const RATE_MAX_PER_WINDOW = 8
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -42,17 +51,71 @@ async function updateWithRetry(build) {
  * Status stays 'pending_payment' until the Go2Pay callback
  * (server/api/payments/go2pay-bikini-mix/[token].post.js) independently
  * verifies and calls confirm_bikini_mix_booking_payment().
+ *
+ * Abuse protection, in order (Phase 1 security hardening) — none of it
+ * changes payment verification or capacity decisions, which stay entirely
+ * inside claim_bikini_mix_booking():
+ *   1. Honeypot    — a filled hidden field => rejected, nothing claimed.
+ *   2. Turnstile   — server-side token verification, same posture as
+ *      server/api/inquiries.post.js (fails closed in production).
+ *   3. Rate limit  — hashed-IP only, loose enough for a real retry.
+ *   4. Early Bird per-IP slot-exhaustion guard — caps how many LIVE unpaid
+ *      early-bird-quoted holds one source can have at once, so a script
+ *      can't indefinitely occupy the 3-slot cap. Lives INSIDE
+ *      claim_bikini_mix_booking() itself now (passed as p_client_ip_hash),
+ *      under the same row lock as the global cap — a first implementation
+ *      checked this in application code before calling the RPC, which had
+ *      a check-then-act race under true concurrency; moving it inside the
+ *      lock closes that race completely. See the migration's banner
+ *      comment (supabase/migrations/20261106000000_checkout_abuse_protection.sql)
+ *      for the full design. Exceeding the cap never rejects the booking —
+ *      it just downgrades this claim to the regular price, same as the
+ *      global cap, which the existing "Guarantee 2" frontend flow already
+ *      handles by asking the customer to confirm before paying more than
+ *      they expected.
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody(event).catch(() => null)
+
+  // 1. Honeypot — a filled hidden field is never a real guest.
+  if (isHoneypotTripped(body)) {
+    setResponseStatus(event, 400)
+    return { success: false, error: GENERIC_ERROR }
+  }
+
   const { issues, fields } = validateBookingCheckout(body)
   if (issues.length) {
     setResponseStatus(event, 400)
     return { success: false, error: issues[0], issues }
   }
 
+  // 2. Turnstile — verified before any hold is claimed or Go2Pay request
+  //    initiated. Same module/posture as server/api/inquiries.post.js.
+  const clientIp = resolveClientIp(event)
+  const turnstileResult = await verifyTurnstileToken(body?.turnstileToken, clientIp)
+  if (!turnstileResult.ok) {
+    setResponseStatus(event, 400)
+    return { success: false, error: VERIFICATION_ERROR, reason: turnstileResult.reason }
+  }
+
   try {
     const supabase = supabaseAdmin()
+
+    // 3. Rate limit (DB-backed, hashed-IP only) — loose enough that a real
+    //    guest retrying payment never trips it.
+    const ipHashValue = ipHash(clientIp)
+    const gate = await checkRateLimit(supabase, {
+      scope: RATE_SCOPE,
+      keyHash: ipHashValue,
+      windowMinutes: RATE_WINDOW_MINUTES,
+      maxPerWindow: RATE_MAX_PER_WINDOW
+    })
+    if (!gate.ok) {
+      setResponseStatus(event, 429)
+      setResponseHeader(event, 'Retry-After', String(gate.retryAfterSeconds))
+      return { success: false, error: 'Too many attempts — please wait a few minutes and try again.' }
+    }
+    await recordRateHit(supabase, { scope: RATE_SCOPE, keyHash: ipHashValue })
 
     // ── Authoritative fabric resolution — never trust the client ──
     const isBikini = fields.garmentType === 'bikini'
@@ -138,7 +201,8 @@ export default defineEventHandler(async (event) => {
       p_email: fields.email,
       p_whatsapp: fields.whatsapp,
       p_marketing_opt_in: fields.marketingOptIn,
-      p_terms_accepted_at: new Date().toISOString()
+      p_terms_accepted_at: new Date().toISOString(),
+      p_client_ip_hash: ipHashValue
     })
 
     if (claimErr || !booking) {

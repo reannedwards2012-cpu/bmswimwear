@@ -1,32 +1,56 @@
 /**
- * Idle-session logout for CUSTOMER accounts.
- *
- * A signed-in customer is signed out after 24 hours of INACTIVITY (not a fixed
- * session lifetime). The source of truth is a persisted "last active" timestamp
- * in localStorage — never a setTimeout, so a suspended tab / slept device is
- * still evaluated correctly on the customer's next interaction or return.
+ * Idle-session logout, shared by CUSTOMER and ADMIN accounts (two separate
+ * guard instances, two separate storage keys, two separate timeouts — see
+ * plugins/idle-logout.client.js). A signed-in user is signed out after a
+ * period of INACTIVITY (not a fixed session lifetime). The source of truth
+ * is a persisted "last active" timestamp in localStorage — never a
+ * setTimeout, so a suspended tab / slept device is still evaluated
+ * correctly on the next interaction or return.
  *
  * Pure + dependency-injected so it unit-tests directly. The browser wiring
  * (activity listeners, visibility/focus, Supabase sign-out, route redirect)
- * lives in plugins/idle-logout.client.js and middleware/auth.js.
+ * lives in plugins/idle-logout.client.js, middleware/auth.js (customer) and
+ * middleware/admin.js (admin).
  *
- * Admin sessions are intentionally out of scope — the plugin only engages this
- * guard for a signed-in NON-admin user, so admin auth behaviour is unchanged.
+ * Customers: 24h (IDLE_KEY / IDLE_TIMEOUT_MS). Admins: 30 minutes
+ * (ADMIN_IDLE_KEY / ADMIN_IDLE_TIMEOUT_MS) — a shorter window is
+ * appropriate given admin sessions can modify/delete business data. Every
+ * exported helper defaults its `key` parameter to IDLE_KEY, so every
+ * existing call site (and this file's own pre-existing tests) is
+ * byte-for-byte unaffected; only the admin guard passes ADMIN_IDLE_KEY
+ * explicitly.
  */
 
-// Bahama Mama-namespaced key. NOT the Supabase session key (supabase-js owns
-// that and handles its own cross-tab sign-out propagation).
+// Bahama Mama-namespaced keys. NOT the Supabase session key (supabase-js
+// owns that and handles its own cross-tab sign-out propagation).
 export const IDLE_KEY = 'bms_auth_last_active'
+export const ADMIN_IDLE_KEY = 'bms_admin_last_active'
 
 export const IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000 // 24h
+export const ADMIN_IDLE_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
 // Don't touch localStorage more than once a minute for activity — cheap and
-// still far finer-grained than a 24h window.
+// still far finer-grained than either window above.
 export const ACTIVITY_THROTTLE_MS = 60 * 1000
+// Admin-only: how long before the 30-minute timeout a "continue session?"
+// warning is shown (Phase 1 security hardening — admins can have unsaved
+// form data, so expiry must never be silent). Not used by the customer
+// guard at all.
+export const ADMIN_IDLE_WARNING_MS = 2 * 60 * 1000
+
+/**
+ * Pure: milliseconds remaining before an idle guard would expire, or null
+ * when there's no timestamp to measure against yet (not yet seeded).
+ * Can be negative — callers treat <= 0 as "already expired".
+ */
+export function msUntilIdleExpiry(lastActive, nowTs, timeoutMs = IDLE_TIMEOUT_MS) {
+  if (typeof lastActive !== 'number' || !Number.isFinite(lastActive)) return null
+  return timeoutMs - (nowTs - lastActive)
+}
 
 // ── persisted timestamp (every access wrapped — storage throws in some modes) ──
-export function readLastActive(storage) {
+export function readLastActive(storage, key = IDLE_KEY) {
   try {
-    const raw = storage && storage.getItem(IDLE_KEY)
+    const raw = storage && storage.getItem(key)
     if (raw == null) return null
     const n = Number(raw)
     return Number.isFinite(n) ? n : null
@@ -35,17 +59,17 @@ export function readLastActive(storage) {
   }
 }
 
-export function writeLastActive(storage, ts) {
+export function writeLastActive(storage, ts, key = IDLE_KEY) {
   try {
-    storage && storage.setItem(IDLE_KEY, String(ts))
+    storage && storage.setItem(key, String(ts))
   } catch {
     /* private mode / quota — idle logout simply degrades to off (fail-open) */
   }
 }
 
-export function clearLastActive(storage) {
+export function clearLastActive(storage, key = IDLE_KEY) {
   try {
-    storage && storage.removeItem(IDLE_KEY)
+    storage && storage.removeItem(key)
   } catch {
     /* ignore */
   }
@@ -68,7 +92,8 @@ export function isIdleExpired(lastActive, nowTs, timeoutMs = IDLE_TIMEOUT_MS) {
  *   now?: () => number,
  *   throttleMs?: number,
  *   timeoutMs?: number,
- *   isEligible: () => boolean,       // signed-in customer, not admin, auth ready
+ *   key?: string,                    // defaults to IDLE_KEY — pass ADMIN_IDLE_KEY for the admin guard
+ *   isEligible: () => boolean,       // signed-in AND the role this guard covers
  *   isSignedIn: () => boolean,       // any Supabase session (customer or admin)
  *   signOut: () => Promise<any>,     // the existing useAuth().signOut
  *   isOnProtectedRoute: () => boolean,
@@ -79,6 +104,7 @@ export function createIdleGuard(deps) {
   const now = deps.now || (() => Date.now())
   const throttleMs = deps.throttleMs ?? ACTIVITY_THROTTLE_MS
   const timeoutMs = deps.timeoutMs ?? IDLE_TIMEOUT_MS
+  const key = deps.key ?? IDLE_KEY
 
   let lastWrite = 0
   let signingOut = false
@@ -93,7 +119,7 @@ export function createIdleGuard(deps) {
     const t = now()
     if (t - lastWrite < throttleMs) return
     lastWrite = t
-    writeLastActive(deps.storage, t)
+    writeLastActive(deps.storage, t, key)
   }
 
   async function signOutIdle() {
@@ -116,7 +142,7 @@ export function createIdleGuard(deps) {
       // visibility / focus / navigation check retries logout. No fresh 24h
       // window is granted just because a sign-out call failed.
       if (signedOut || !deps.isSignedIn()) {
-        clearLastActive(deps.storage)
+        clearLastActive(deps.storage, key)
         lastWrite = 0
       }
 
@@ -141,13 +167,13 @@ export function createIdleGuard(deps) {
   async function checkIdle() {
     if (signingOut || !deps.isEligible()) return 'skip'
 
-    const last = readLastActive(deps.storage)
+    const last = readLastActive(deps.storage, key)
     if (last == null) {
       // Signed in but no timestamp yet — fresh login, first run after this
       // deploy, or storage was cleared. Start the clock now (NOT an activity
       // bump; just seeding).
       lastWrite = now()
-      writeLastActive(deps.storage, lastWrite)
+      writeLastActive(deps.storage, lastWrite, key)
       return 'seeded'
     }
 
@@ -163,7 +189,7 @@ export function createIdleGuard(deps) {
     if (deps.isEligible()) return checkIdle()
     // Not an eligible customer session any more. If the whole session is gone
     // (manual sign out / idle sign out), drop our key too.
-    if (!deps.isSignedIn()) clearLastActive(deps.storage)
+    if (!deps.isSignedIn()) clearLastActive(deps.storage, key)
     lastWrite = 0
     return 'skip'
   }

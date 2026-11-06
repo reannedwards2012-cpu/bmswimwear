@@ -6,6 +6,12 @@
     >
       You were signed out after being inactive for 24 hours. Please sign in again.
     </p>
+    <p
+      v-else-if="adminIdleNotice"
+      class="mx-auto mb-6 max-w-md rounded-2xl bg-shell/60 p-4 text-center text-sm leading-relaxed text-ink/70"
+    >
+      Your admin session expired after 30 minutes of inactivity. Please sign in again.
+    </p>
     <AuthForm mode="signin" @authenticated="onAuthenticated" />
   </div>
 </template>
@@ -18,6 +24,7 @@ useHead({ title: 'Sign in — Bahama Mama Swimwear' })
 const route = useRoute()
 
 const idleNotice = computed(() => route.query.reason === 'idle')
+const adminIdleNotice = computed(() => route.query.reason === 'admin-idle')
 
 function onAuthenticated() {
   const r = route.query.redirect

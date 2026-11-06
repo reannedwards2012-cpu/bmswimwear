@@ -31,6 +31,13 @@
         @update:model-value="update({ whatsapp: $event })"
       />
 
+      <!-- honeypot: hidden from real guests, tempting to bots. -->
+      <div class="hidden" aria-hidden="true">
+        <label>Company
+          <input :value="modelValue.company" type="text" tabindex="-1" autocomplete="off" @input="update({ company: $event.target.value })" />
+        </label>
+      </div>
+
       <div class="border-t border-ink/10 pt-6">
         <div class="flex items-center gap-2">
           <h2 class="font-display text-lg font-semibold text-ink">Your Measurements</h2>

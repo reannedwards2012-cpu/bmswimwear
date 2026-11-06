@@ -29,20 +29,38 @@ export const RETENTION_HOURS = 24
 const RATE_TABLE = 'inquiry_rate_hits'
 
 /**
- * Resolve the caller's IP. On Netlify the trustworthy header is
- * `x-nf-client-connection-ip`; `x-forwarded-for` (first hop) and h3's
- * `getRequestIP` are fallbacks. Returns null when nothing is available
- * (e.g. local dev) — the caller then skips IP throttling.
+ * Resolve the caller's IP for abuse-throttling purposes — used by every
+ * rate limiter in this codebase (Inquiries here, Checkout/Bikini-Mix in
+ * server/utils/checkoutRateLimit.js).
+ *
+ * `x-nf-client-connection-ip` is the ONLY header trusted: Netlify's own
+ * support staff describe it as the one header they guarantee reflects the
+ * real connecting client IP ("we make no guarantees on anything except
+ * X-Nf-Client-Connection-Ip"), and confirm `X-Forwarded-For` is explicitly
+ * NOT a header Netlify supports or sanitizes — a client can set it
+ * directly, so trusting it for abuse protection would let that protection
+ * be trivially bypassed by sending a different fake value on every
+ * request. Deliberately NOT read here, even as a fallback.
+ *
+ * Fallback when that header is absent (expected in local dev — `nuxt dev`
+ * never runs behind Netlify's edge — and logged as a warning anywhere
+ * else, since on the deployed site it should never be missing): the raw
+ * socket peer address only (`getRequestIP` with no `xForwardedFor`
+ * option). That value comes from the actual TCP connection, not from any
+ * header, so a request can never override it — safe, just not meaningful
+ * behind a reverse proxy (which is fine, since production always has the
+ * Netlify header). Returns null only if even that fails (e.g. no
+ * underlying connection object in some test harness) — callers already
+ * treat null as "skip IP throttling," so this still fails open.
  */
 export function resolveClientIp(event) {
   const nf = getRequestHeader(event, 'x-nf-client-connection-ip')
   if (nf && nf.trim()) return nf.trim()
 
-  const xff = getRequestHeader(event, 'x-forwarded-for')
-  if (xff && xff.trim()) return xff.split(',')[0].trim()
+  console.warn('[ip-resolve] x-nf-client-connection-ip missing — falling back to the raw socket address (expected in local dev only; investigate if seen in production)')
 
   try {
-    const ip = getRequestIP(event, { xForwardedFor: true })
+    const ip = getRequestIP(event)
     return ip ? String(ip).trim() : null
   } catch {
     return null

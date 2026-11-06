@@ -4,9 +4,21 @@ import { fetchCatalogueForCheckout } from '../utils/productCatalogue.js'
 import { createPaymentRequest, getPaymentRequest } from '../utils/go2pay.js'
 import { siteUrl } from '../utils/siteUrl.js'
 import { getOptionalUserId } from '../utils/authUser.js'
+import { isHoneypotTripped } from '../utils/inquiryValidation.js'
+import { verifyTurnstileToken } from '../utils/turnstile.js'
+import { resolveClientIp, ipHash } from '../utils/inquiryRateLimit.js'
+import { checkRateLimit, recordRateHit } from '../utils/checkoutRateLimit.js'
 
 const GENERIC_ERROR = 'We couldn’t place your order right now. Please try again.'
 const PAYMENT_INIT_ERROR = 'We couldn’t start payment right now. Please try again in a moment.'
+const VERIFICATION_ERROR = 'We couldn’t verify you’re human — please try again.'
+
+// Deliberately loose — a real customer retries the SAME checkout several
+// times across one purchase attempt (a declined card, a closed Go2Pay tab,
+// a slow connection). This caps scripted flooding, not legitimate retries.
+const RATE_SCOPE = 'checkout'
+const RATE_WINDOW_MINUTES = 10
+const RATE_MAX_PER_WINDOW = 8
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -51,9 +63,60 @@ async function updateWithRetry(build) {
  * (orders.marketing_opt_in). The Brevo List #3 subscription itself is applied
  * only after Go2Pay has authoritatively verified the order as paid — never at
  * pending-order creation (server/utils/checkoutNewsletter.js).
+ *
+ * Abuse protection, in order (Phase 1 security hardening):
+ *   1. Honeypot    — a filled hidden field => rejected, nothing created.
+ *   2. Turnstile   — server-side token verification (server/utils/turnstile.js).
+ *      Missing/invalid/expired token, a failed verify request, or a
+ *      missing/invalid secret key all => rejected, nothing created.
+ *   3. Rate limit  — hashed-IP only (server/utils/checkoutRateLimit.js),
+ *      deliberately loose so a legitimate retry (declined card, closed
+ *      Go2Pay tab) is never blocked. Over the limit => 429.
+ * None of this changes payment verification, pricing, or order persistence —
+ * it only gates whether the existing logic below ever runs.
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody(event).catch(() => null)
+
+  // 1. Honeypot — a filled hidden field is never a real customer.
+  if (isHoneypotTripped(body)) {
+    setResponseStatus(event, 400)
+    return { success: false, error: GENERIC_ERROR }
+  }
+
+  // 2. Turnstile — verified before anything is created or any Go2Pay request
+  //    is initiated. Same module/posture as server/api/inquiries.post.js:
+  //    fails closed in production when misconfigured, open only in dev/test.
+  const clientIp = resolveClientIp(event)
+  const turnstileResult = await verifyTurnstileToken(body?.turnstileToken, clientIp)
+  if (!turnstileResult.ok) {
+    setResponseStatus(event, 400)
+    return { success: false, error: VERIFICATION_ERROR, reason: turnstileResult.reason }
+  }
+
+  // 3. Rate limit (DB-backed, hashed-IP only) — loose enough that a real
+  //    customer retrying a declined card never trips it.
+  let supabase
+  try {
+    supabase = supabaseAdmin()
+  } catch (err) {
+    console.error('[checkout] Supabase not configured:', err?.message)
+    setResponseStatus(event, 500)
+    return { success: false, error: GENERIC_ERROR }
+  }
+  const ipHashValue = ipHash(clientIp)
+  const gate = await checkRateLimit(supabase, {
+    scope: RATE_SCOPE,
+    keyHash: ipHashValue,
+    windowMinutes: RATE_WINDOW_MINUTES,
+    maxPerWindow: RATE_MAX_PER_WINDOW
+  })
+  if (!gate.ok) {
+    setResponseStatus(event, 429)
+    setResponseHeader(event, 'Retry-After', String(gate.retryAfterSeconds))
+    return { success: false, error: 'Too many attempts — please wait a few minutes and try again.' }
+  }
+  await recordRateHit(supabase, { scope: RATE_SCOPE, keyHash: ipHashValue })
 
   // Authoritative product data — fetched fresh from Supabase on every attempt
   // (so a cart whose product changed since it was added is revalidated, not
@@ -63,7 +126,7 @@ export default defineEventHandler(async (event) => {
     const productSlugs = Array.isArray(body?.items)
       ? body.items.map((i) => (i && typeof i === 'object' ? i.productId : null)).filter(Boolean)
       : []
-    catalogue = await fetchCatalogueForCheckout(supabaseAdmin(), productSlugs)
+    catalogue = await fetchCatalogueForCheckout(supabase, productSlugs)
   } catch (err) {
     console.error('[checkout] catalogue fetch failed:', err?.message)
     setResponseStatus(event, 500)
@@ -93,8 +156,6 @@ export default defineEventHandler(async (event) => {
     'id, order_number, status, first_name, last_name, email, phone, subtotal_usd_cents, shipping_usd_cents, total_usd_cents, payment_callback_token, go2pay_request_id, go2pay_payment_url'
 
   try {
-    const supabase = supabaseAdmin()
-
     // ── 1. Idempotency: existing order for this checkout attempt? ──
     const existing = await supabase
       .from('orders')
