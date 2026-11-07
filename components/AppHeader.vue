@@ -95,6 +95,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 const links = [
   { label: 'Home', to: '/' },
   { label: 'Shop', to: '/shop' },
+  { label: 'Swimsuit Mixer', to: '/swimsuit-mixer' },
   { label: 'About', to: '/about' },
   { label: 'Contact', to: '/contact' }
 ]

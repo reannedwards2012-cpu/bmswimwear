@@ -25,6 +25,13 @@
  * governs — both are covered below by the Supabase project origin and,
  * for Go2Pay specifically, by the fact that CSP never restricts top-level
  * navigation targets at all.
+ *
+ * media-src was originally left out entirely, which meant it silently
+ * fell back to default-src 'self' — blocking every <video :src="..."> in
+ * the app (the Swimsuit Mixer promo video, loaded directly from Supabase
+ * Storage on a different origin) from loading at all, in every browser,
+ * not just one. Fixed the same way img-src already allows that origin for
+ * images.
  */
 
 const SCRIPT_TAG_RE = /<script(?![^>]*\stype=)[^>]*>([\s\S]*?)<\/script>/g
@@ -56,6 +63,7 @@ export function buildContentSecurityPolicy(scriptHashes, { supabaseUrl }) {
     'script-src': scriptSrc,
     'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
     'img-src': ["'self'", 'data:', supabaseOrigin].filter(Boolean),
+    'media-src': ["'self'", supabaseOrigin].filter(Boolean),
     'font-src': ["'self'", 'https://fonts.gstatic.com'],
     'connect-src': ["'self'", supabaseOrigin, 'https://challenges.cloudflare.com'].filter(Boolean),
     'frame-src': ['https://challenges.cloudflare.com'],

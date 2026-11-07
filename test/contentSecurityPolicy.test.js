@@ -69,6 +69,11 @@ describe('buildContentSecurityPolicy', () => {
     expect(csp).toContain('connect-src \'self\' https://proj.supabase.co https://challenges.cloudflare.com')
   })
 
+  it('allows the Supabase project origin for media-src — the Swimsuit Mixer promo video is loaded directly from Storage', () => {
+    const csp = buildContentSecurityPolicy([], CONFIG)
+    expect(csp).toContain('media-src \'self\' https://proj.supabase.co')
+  })
+
   it('allows data: in img-src — required for the MFA enrollment QR code', () => {
     const csp = buildContentSecurityPolicy([], CONFIG)
     const imgSrcLine = csp.split('; ').find((d) => d.startsWith('img-src'))
