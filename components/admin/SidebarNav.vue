@@ -34,7 +34,8 @@ const LINKS = [
   { label: 'Stockists', to: '/admin/stockists', icon: 'M4 21V9l8-5 8 5v12M9 21v-6h6v6M4 9h16' },
   { label: 'Swimsuit Mixer', to: '/admin/bikini-mix', icon: 'M8 4c2 0 2 3 4 3s2-3 4-3M4 20c3-6 6-9 8-9s5 3 8 9M9 11l-2 9M15 11l2 9' },
   { label: 'Custom Quotes', to: '/admin/quotes', icon: 'M7 3h8l4 4v14H5V3h2Zm8 0v4h4M8 9h8M8 13h8M8 17h5' },
-  { label: 'Inquiries', to: '/admin/inquiries', icon: 'M3 5h18v14H3V5Zm0 0 9 7 9-7' }
+  { label: 'Inquiries', to: '/admin/inquiries', icon: 'M3 5h18v14H3V5Zm0 0 9 7 9-7' },
+  { label: 'Security', to: '/admin/security', icon: 'M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Zm0 5v6m-2.5-3h5' }
 ]
 
 const isActive = (link) => (link.exact ? route.path === link.to : route.path.startsWith(link.to))

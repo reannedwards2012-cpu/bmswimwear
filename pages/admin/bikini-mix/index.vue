@@ -198,9 +198,10 @@
           </span>
           <div class="space-y-2">
             <button type="button" class="btn-outline px-4 py-1.5 text-xs" :disabled="uploadingVideo" @click="fileInput?.click()">
-              {{ uploadingVideo ? 'Uploading…' : form.promoVideoUrl ? 'Replace video' : 'Upload video' }}
+              {{ uploadingVideo ? `Uploading… ${videoElapsedLabel}` : form.promoVideoUrl ? 'Replace video' : 'Upload video' }}
             </button>
-            <button v-if="form.promoVideoUrl" type="button" class="block text-xs text-ink/45 hover:text-coral" @click="form.promoVideoUrl = ''">
+            <p v-if="uploadingVideo" class="text-[0.65rem] text-ink/40">Larger videos can take a few minutes — this won't hang forever.</p>
+            <button v-if="form.promoVideoUrl && !uploadingVideo" type="button" class="block text-xs text-ink/45 hover:text-coral" @click="form.promoVideoUrl = ''">
               Remove
             </button>
             <input ref="fileInput" type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" @change="onVideoFile" />
@@ -313,11 +314,27 @@ watch(
 )
 
 // ── video upload ──
+// Direct-to-Storage via a signed upload URL (composables/useBikiniMixMediaUpload.js)
+// — large video files never pass through our own Netlify function, which is
+// what previously made uploads hang indefinitely (see video-upload-url.post.js's
+// header comment for the full root-cause explanation).
+const { uploadToSignedUrl } = useBikiniMixMediaUpload()
 const fileInput = ref(null)
 const uploadingVideo = ref(false)
 const videoError = ref('')
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime']
-const MAX_VIDEO_BYTES = 80 * 1024 * 1024
+// Matches the bucket's own 50MB file_size_limit and the server's allowed
+// types — was previously (incorrectly) 80MB here, which let the UI accept
+// files the backend could never actually store.
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024
+const UPLOAD_TIMEOUT_MS = 5 * 60 * 1000 // generous for 50MB on a slow connection, but never hangs forever
+
+const videoElapsedSeconds = ref(0)
+const videoElapsedLabel = computed(() => {
+  const s = videoElapsedSeconds.value
+  return s < 60 ? `(${s}s)` : `(${Math.floor(s / 60)}m ${s % 60}s)`
+})
+let videoElapsedTimer = null
 
 async function onVideoFile(e) {
   const file = e.target.files?.[0]
@@ -329,19 +346,28 @@ async function onVideoFile(e) {
     return
   }
   if (file.size > MAX_VIDEO_BYTES) {
-    videoError.value = 'Video is too large — under 80MB please.'
+    videoError.value = 'Video is too large — under 50MB please.'
     return
   }
   uploadingVideo.value = true
+  videoElapsedSeconds.value = 0
+  videoElapsedTimer = setInterval(() => { videoElapsedSeconds.value++ }, 1000)
   try {
-    const body = new FormData()
-    body.append('file', file)
-    const { url } = await authedFetch('/api/admin/bikini-mix/video', { method: 'POST', body })
-    form.value.promoVideoUrl = url
+    // Step 1: ask the server for a short-lived, direct-to-storage upload URL.
+    // Tiny request/response, independent of the file's size.
+    const { token, path, publicUrl } = await authedFetch('/api/admin/bikini-mix/video-upload-url', {
+      method: 'POST',
+      body: { contentType: file.type }
+    })
+    // Step 2: upload the actual bytes straight to Supabase Storage from the
+    // browser — never touches our server.
+    await uploadToSignedUrl('bikini-mix-media', path, token, file, { contentType: file.type, timeoutMs: UPLOAD_TIMEOUT_MS })
+    form.value.promoVideoUrl = publicUrl
   } catch (err) {
-    videoError.value = err?.data?.error || 'Upload failed — try again.'
+    videoError.value = err?.data?.error || err?.message || 'Upload failed — try again.'
   } finally {
     uploadingVideo.value = false
+    if (videoElapsedTimer) { clearInterval(videoElapsedTimer); videoElapsedTimer = null }
   }
 }
 

@@ -144,7 +144,8 @@
           class="mt-0.5 h-5 w-5 shrink-0 rounded border-ink/25 text-coral focus:ring-coral"
           @change="$emit('update:policyAccepted', $event.target.checked)"
         />
-        I have read and agree to the cancellation and refund policy above.
+        I have read and agree to the cancellation and refund policy above, and to the
+        <NuxtLink to="/privacy-policy" target="_blank" class="font-semibold text-coral link-underline" @click.stop>Privacy Policy</NuxtLink>.
       </label>
     </section>
 

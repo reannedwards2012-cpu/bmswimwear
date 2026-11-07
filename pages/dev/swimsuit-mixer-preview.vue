@@ -95,7 +95,7 @@
 import { computed, ref } from 'vue'
 import { isValidEmail, isValidPhone, isValidMeasurement } from '~/utils/validate'
 
-definePageMeta({ layout: false, middleware: 'admin' })
+definePageMeta({ layout: false, middleware: ['dev-only', 'admin'] })
 useHead({ title: 'Swimsuit Mixer Preview (dev) — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
 
 // ── mock data — mirrors the shape server/utils/bikiniMixMappers.js's

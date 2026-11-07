@@ -25,6 +25,13 @@ export function friendlyAuthError(message) {
   if (/user already registered/i.test(m)) {
     return 'That email already has an account — try signing in or resetting your password.'
   }
+  // Phase 3 (MFA) — TOTP enroll/verify errors.
+  if (/challenge.*expired|expired.*challenge/i.test(m)) {
+    return 'That code expired — enter the current code shown in your authenticator app.'
+  }
+  if (/invalid.*totp|totp.*invalid|invalid.*code|code.*invalid/i.test(m)) {
+    return 'That code isn’t right — check your authenticator app and try again.'
+  }
 
   return m
 }

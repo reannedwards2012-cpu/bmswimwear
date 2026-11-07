@@ -26,7 +26,15 @@ export default defineNuxtConfig({
       // Turnstile SITE keys are designed by Cloudflare to be public (embedded
       // in page HTML) — only TURNSTILE_SECRET_KEY (server/utils/turnstile.js)
       // is sensitive, and it is read from process.env directly, never here.
-      turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || ''
+      turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || '',
+      // Phase 3 (MFA) — NOT a secret: just today's operational mode, same
+      // thing an admin would see reflected in the UI anyway (a banner
+      // telling them to enroll now). The actual enforcement decision is
+      // made server-side from this SAME env var in server/utils/authUser.js
+      // — this is only used to keep the client's UX consistent with it
+      // (e.g. middleware/admin.js not fighting a server that's deliberately
+      // being lenient during rollout).
+      adminMfaGrace: process.env.ADMIN_MFA_ENFORCEMENT === 'grace'
     }
   },
 

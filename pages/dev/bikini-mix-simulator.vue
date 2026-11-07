@@ -189,7 +189,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
-definePageMeta({ layout: false, middleware: 'admin' })
+definePageMeta({ layout: false, middleware: ['dev-only', 'admin'] })
 useHead({ title: 'Bikini Mix Simulator (dev) — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
 
 const { getAccessToken } = useAuth()

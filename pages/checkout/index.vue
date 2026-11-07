@@ -216,6 +216,7 @@
           <p v-if="formError" class="text-center text-xs text-coral">{{ formError }}</p>
           <p class="text-center text-[0.7rem] text-ink/40">
             You’ll be taken to Go2Pay to complete payment securely.
+            See our <NuxtLink to="/privacy-policy" class="link-underline hover:text-ink/60">Privacy Policy</NuxtLink>.
           </p>
         </aside>
       </form>

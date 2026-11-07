@@ -28,6 +28,9 @@
         <p v-if="resend.state === 'error'" class="text-xs text-coral">{{ resend.error }}</p>
       </div>
 
+      <!-- Phase 3 (MFA): second factor required before sign-in completes -->
+      <AdminMfaChallenge v-else-if="showMfaChallenge" @verified="emit('authenticated')" />
+
       <!-- Sign in / Sign up form -->
       <form v-else class="space-y-4" novalidate @submit.prevent="onSubmit">
         <label class="block">
@@ -78,6 +81,11 @@
           {{ loading ? 'One moment…' : isSignup ? 'Create account' : 'Sign in' }}
         </button>
 
+        <p v-if="isSignup" class="text-center text-[0.7rem] text-ink/40">
+          By creating an account, you agree to our
+          <NuxtLink to="/privacy-policy" class="link-underline hover:text-ink/60">Privacy Policy</NuxtLink>.
+        </p>
+
         <p v-if="formError" class="text-sm text-coral">{{ formError }}</p>
 
         <div v-if="needsConfirm" class="rounded-2xl bg-shell/60 p-4 text-sm leading-relaxed text-ink/70">
@@ -95,7 +103,7 @@
         </div>
       </form>
 
-      <p v-if="!confirmSent" class="mt-5 text-center text-sm text-ink/60">
+      <p v-if="!confirmSent && !showMfaChallenge" class="mt-5 text-center text-sm text-ink/60">
         <template v-if="isSignup">
           Already have an account?
           <NuxtLink :to="withRedirect('/login')" class="text-coral link-underline">Sign in</NuxtLink>
@@ -110,7 +118,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { PASSWORD_HINT, friendlyAuthError } from '~/utils/authErrors'
 
 const props = defineProps({
@@ -118,7 +126,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['authenticated'])
 
-const { signIn, signUp, resendConfirmation } = useAuth()
+const { signIn, signUp, resendConfirmation, isLoggedIn, needsMfaStepUp } = useAuth()
 const route = useRoute()
 
 const isSignup = computed(() => props.mode === 'signup')
@@ -131,16 +139,28 @@ const confirmSent = ref(false)
 const needsConfirm = ref(false)
 const resend = reactive({ state: '', error: '' })
 
+// Phase 3 (MFA) — an admin who is ALREADY signed in at aal1 (e.g. direct
+// navigation to /login?reason=mfa-required after middleware/admin.js
+// caught a stale/pre-step-up session) lands straight on the "enter your
+// code" view, skipping email/password — they don't need to re-authenticate
+// the first factor, only the second.
+const showMfaChallenge = ref(false)
+onMounted(() => {
+  if (!isSignup.value && isLoggedIn.value && needsMfaStepUp.value) showMfaChallenge.value = true
+})
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const heading = computed(() =>
   confirmSent.value
     ? 'Check your *inbox*'
-    : isSignup.value
-      ? 'Create your *account*'
-      : 'Welcome *back*'
+    : showMfaChallenge.value
+      ? 'Verify your *identity*'
+      : isSignup.value
+        ? 'Create your *account*'
+        : 'Welcome *back*'
 )
-const eyebrow = computed(() => (confirmSent.value ? 'Almost there' : 'Account'))
+const eyebrow = computed(() => (confirmSent.value || showMfaChallenge.value ? 'Almost there' : 'Account'))
 
 const redirectPath = computed(() => {
   const r = route.query.redirect
@@ -197,6 +217,16 @@ async function onSubmit() {
           return
         }
         formError.value = friendlyAuthError(error)
+        return
+      }
+      // Phase 3 (MFA) — password alone is only the first factor. An admin
+      // with an enrolled authenticator must verify it before this counts as
+      // a completed sign-in. (signIn() awaits a fresh sync, so this is
+      // reliably current the instant it resolves — see useAuth.js.) An
+      // admin who hasn't enrolled MFA at all yet has nothing to step up to
+      // here; they're sent on to /admin/security by middleware/admin.js.
+      if (needsMfaStepUp.value) {
+        showMfaChallenge.value = true
         return
       }
       emit('authenticated')

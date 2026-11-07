@@ -12,6 +12,12 @@
     >
       Your admin session expired after 30 minutes of inactivity. Please sign in again.
     </p>
+    <p
+      v-else-if="mfaRequiredNotice"
+      class="mx-auto mb-6 max-w-md rounded-2xl bg-shell/60 p-4 text-center text-sm leading-relaxed text-ink/70"
+    >
+      For your security, please verify your identity with your authenticator app to continue.
+    </p>
     <AuthForm mode="signin" @authenticated="onAuthenticated" />
   </div>
 </template>
@@ -25,6 +31,7 @@ const route = useRoute()
 
 const idleNotice = computed(() => route.query.reason === 'idle')
 const adminIdleNotice = computed(() => route.query.reason === 'admin-idle')
+const mfaRequiredNotice = computed(() => route.query.reason === 'mfa-required')
 
 function onAuthenticated() {
   const r = route.query.redirect

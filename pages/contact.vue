@@ -62,6 +62,9 @@
         </button>
         <p v-if="sent" class="text-sm text-ink/70">Thanks! We've got your message and will be in touch soon.</p>
         <p v-else-if="error" class="text-sm text-coral" role="alert" aria-live="polite">{{ error }}</p>
+        <p class="text-[0.7rem] text-ink/40">
+          See our <NuxtLink to="/privacy-policy" class="link-underline hover:text-ink/60">Privacy Policy</NuxtLink> for how we use this information.
+        </p>
       </form>
 
       <aside class="space-y-4">

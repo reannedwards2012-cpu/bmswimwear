@@ -46,9 +46,12 @@
     </div>
 
     <div class="border-t border-sand/10">
-      <div class="container-bm flex flex-col items-center justify-between gap-2 py-6 text-xs text-sand/50 md:flex-row">
+      <div class="container-bm flex flex-col items-center justify-between gap-3 py-6 text-xs text-sand/50 md:flex-row">
         <span>© {{ new Date().getFullYear() }} Bahama Mama Swimwear. All rights reserved.</span>
-        <span>Handcrafted in the Caribbean 🌊</span>
+        <div class="flex items-center gap-4">
+          <NuxtLink to="/privacy-policy" class="link-underline hover:text-sand">Privacy Policy</NuxtLink>
+          <span>Handcrafted in the Caribbean 🌊</span>
+        </div>
       </div>
     </div>
   </footer>

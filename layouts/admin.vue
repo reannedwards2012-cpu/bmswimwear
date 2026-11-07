@@ -25,6 +25,8 @@
         <span class="h-9 w-9" aria-hidden="true" />
       </header>
 
+      <AdminMfaGraceBanner />
+
       <main class="flex-1 px-4 py-7 sm:px-6 md:px-8 md:py-9">
         <slot />
       </main>
