@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
       .select(GALLERY_IMAGE_SELECT)
       .eq('is_active', true)
       .order('sort_order', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
 
     if (error) {
       const notConfigured = error.code === '42P01' || error.code === 'PGRST205'

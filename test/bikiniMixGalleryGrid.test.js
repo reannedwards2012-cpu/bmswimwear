@@ -60,4 +60,10 @@ describe('GalleryGrid — the "Get Inspired" inline gallery section', () => {
     expect(wrapper.text()).toContain('Included')
     expect(wrapper.text()).toContain('Add at event')
   })
+
+  it('shows the heading with its descriptive text beneath it', () => {
+    const wrapper = mount(GalleryGrid, { props: { images: [IMG(0)] } })
+    expect(wrapper.text()).toContain('Get Inspired')
+    expect(wrapper.text()).toContain('Explore some of the charms, beads and other details')
+  })
 })

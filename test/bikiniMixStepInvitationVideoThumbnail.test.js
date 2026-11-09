@@ -66,6 +66,12 @@ describe('StepInvitation — custom video thumbnail / play overlay', () => {
     expect(wrapper.findAll('img').some((img) => img.attributes('src') === 'https://example.test/1.jpg')).toBe(true)
   })
 
+  it('shows "Reserve Your Spot" as the main CTA when bookings are open', () => {
+    const wrapper = mount(StepInvitation, { props: { ...BASE_PROPS, isBookingsOpen: true } })
+    expect(wrapper.text()).toContain('Reserve Your Spot')
+    expect(wrapper.text()).not.toContain('Build Your Swimsuit')
+  })
+
   it('bubbles a gallery image click up as "open-gallery-at" with the clicked index', async () => {
     const images = Array.from({ length: 2 }, (_, i) => ({ id: `g${i}`, imageUrl: `https://example.test/${i}.jpg`, caption: `Photo ${i}`, includedInTicket: false }))
     const wrapper = mount(StepInvitation, { props: { ...BASE_PROPS, galleryImages: images }, ...GLOBAL_STUBS })

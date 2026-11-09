@@ -14,7 +14,7 @@ export function mockEvent() {
     eventName: 'The Swimsuit Mixer by Bahama Mama',
     eventDate: '2026-12-12',
     eventDateIsTentative: false,
-    venue: 'The Closet, Grenada',
+    venue: 'The Closet, Grand Anse Shopping Center',
     venueIsConfirmed: true,
     bookingDeadline: '2026-12-05',
     cancellationDeadline: '2026-11-20',

@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
       .from('bikini_mix_gallery_images')
       .select(GALLERY_IMAGE_SELECT)
       .order('sort_order', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
 
     if (error) {
       if (isMigrationNotAppliedError(error)) {

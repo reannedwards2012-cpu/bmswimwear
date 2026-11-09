@@ -80,9 +80,17 @@
       </AdminBulkActionBar>
 
       <p v-if="bulkResultMessage" class="mt-4 rounded-2xl bg-shell/60 px-4 py-3 text-sm text-ink/70">{{ bulkResultMessage }}</p>
+      <p class="mt-4 text-xs text-ink/45">Drag a photo by its ⠿ handle to reorder — this sets the order shown on the public page.</p>
+      <p v-if="reorderError" class="mt-2 text-xs text-coral">{{ reorderError }}</p>
 
       <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-      <div v-for="img in images" :key="img.id" class="relative overflow-hidden rounded-3xl border border-ink/10 bg-cream shadow-card">
+      <div
+        v-for="img in images"
+        :key="img.id"
+        :data-gallery-id="img.id"
+        class="relative overflow-hidden rounded-3xl border border-ink/10 bg-cream shadow-card transition-opacity"
+        :class="dragId === img.id ? 'opacity-40' : ''"
+      >
         <input
           type="checkbox"
           class="absolute left-2 top-2 z-10 h-5 w-5 rounded border-ink/30 bg-cream/90 text-coral focus:ring-coral"
@@ -90,6 +98,14 @@
           :aria-label="`Select photo ${img.caption || img.id}`"
           @change="toggleSelected(img.id)"
         />
+        <button
+          type="button"
+          class="absolute right-2 top-2 z-10 flex h-7 w-7 cursor-grab touch-none items-center justify-center rounded-full bg-cream/90 text-sm text-ink/50 active:cursor-grabbing"
+          aria-label="Drag to reorder"
+          @pointerdown="onDragStart($event, img.id)"
+        >
+          ⠿
+        </button>
         <div class="aspect-square w-full bg-cover bg-center" :style="{ backgroundImage: `url(${img.imageUrl})` }" />
         <div class="space-y-2 p-3">
           <p class="truncate text-xs font-semibold text-ink">{{ img.caption || CATEGORY_LABELS[img.category] }}</p>
@@ -124,6 +140,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { mockGalleryImages } from '~/data/bikiniMixAdminMock.js'
+import { reorderList } from '~/utils/reorderList.js'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
 useHead({ title: 'Swimsuit Mixer Gallery — Admin — Bahama Mama Swimwear', meta: [{ name: 'robots', content: 'noindex' }] })
@@ -201,7 +218,7 @@ async function onUpload() {
       isActive: true,
       createdAt: new Date().toISOString()
     }
-    data.value.images = [image, ...data.value.images]
+    data.value.images = [...data.value.images, image]
     uploadForm.caption = ''
     uploadForm.includedInTicket = false
     if (fileInput.value) fileInput.value.value = ''
@@ -221,7 +238,7 @@ async function onUpload() {
       body,
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     })
-    if (data.value) data.value.images = [res.image, ...data.value.images]
+    if (data.value) data.value.images = [...data.value.images, res.image]
     uploadForm.caption = ''
     uploadForm.includedInTicket = false
     if (fileInput.value) fileInput.value.value = ''
@@ -258,6 +275,58 @@ async function remove(img) {
     removeFromSelection(img.id)
   } catch {
     /* leave it listed if deletion failed */
+  }
+}
+
+// ── drag-and-drop reorder — pointer events (not native HTML5 DnD) so the
+// same code path drives both mouse and touch dragging, including mobile.
+// Reorders live, in the local list, as the pointer passes over another
+// card; the final order is only persisted once, on release. ───────────────
+const dragId = ref(null)
+const reorderError = ref('')
+let dragHandleEl = null
+
+function onDragStart(e, id) {
+  e.preventDefault()
+  dragId.value = id
+  reorderError.value = ''
+  dragHandleEl = e.currentTarget
+  dragHandleEl.setPointerCapture?.(e.pointerId)
+  dragHandleEl.addEventListener('pointermove', onDragMove)
+  dragHandleEl.addEventListener('pointerup', onDragEnd)
+  dragHandleEl.addEventListener('pointercancel', onDragEnd)
+}
+
+function onDragMove(e) {
+  if (!dragId.value || !data.value) return
+  const el = typeof document.elementFromPoint === 'function' ? document.elementFromPoint(e.clientX, e.clientY) : null
+  const targetId = el?.closest('[data-gallery-id]')?.getAttribute('data-gallery-id')
+  if (!targetId) return
+  const next = reorderList(data.value.images, dragId.value, targetId)
+  if (next !== data.value.images) data.value.images = next
+}
+
+async function onDragEnd() {
+  if (dragHandleEl) {
+    dragHandleEl.removeEventListener('pointermove', onDragMove)
+    dragHandleEl.removeEventListener('pointerup', onDragEnd)
+    dragHandleEl.removeEventListener('pointercancel', onDragEnd)
+    dragHandleEl = null
+  }
+  const wasDragging = dragId.value != null
+  dragId.value = null
+  if (!wasDragging) return
+
+  const order = images.value.map((img) => img.id)
+  if (previewMode.value) {
+    data.value.images.forEach((img, i) => { img.sortOrder = i })
+    return
+  }
+  try {
+    await authedFetch('/api/admin/bikini-mix/gallery/reorder', { method: 'POST', body: { order } })
+  } catch {
+    reorderError.value = 'Could not save the new order — please try again.'
+    await refresh()
   }
 }
 

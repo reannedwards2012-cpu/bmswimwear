@@ -141,7 +141,7 @@
       <!-- 7. continue/customize button -->
       <div class="mt-8 flex flex-col items-center gap-3">
         <button v-if="isBookingsOpen" type="button" class="rounded-full bg-mixer-coral px-10 py-4 text-base font-semibold text-white shadow-soft transition hover:-translate-y-0.5 hover:bg-mixer-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-mixer-coral" @click="$emit('continue')">
-          Build Your Swimsuit
+          Reserve Your Spot
         </button>
         <div v-else class="max-w-sm rounded-3xl bg-mixer-blush/30 px-6 py-5 text-center">
           <p class="text-sm font-semibold text-mixer-ink">Bookings aren't open just yet</p>

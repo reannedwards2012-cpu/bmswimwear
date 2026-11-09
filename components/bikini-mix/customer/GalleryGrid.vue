@@ -4,8 +4,8 @@
       <p class="text-[0.65rem] font-semibold uppercase tracking-widest2 text-mixer-coral">Customize Your Way</p>
       <h2 class="mt-1.5 font-display text-2xl font-semibold text-mixer-ink sm:text-3xl">Get Inspired</h2>
       <p class="mx-auto mt-2 max-w-md text-sm text-mixer-ink/55">
-        Straps, beads, charms and finishing touches from past Swimsuit Mixer events — browsing here never changes
-        your selections.
+        Explore some of the charms, beads and other details you can choose from at the event to make your swimsuit
+        your own.
       </p>
     </div>
 

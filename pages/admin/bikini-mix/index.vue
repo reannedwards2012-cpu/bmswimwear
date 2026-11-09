@@ -62,7 +62,7 @@
           </label>
           <label class="block">
             <span class="lbl">Venue</span>
-            <input v-model.trim="form.venue" type="text" placeholder="The Closet, Grenada" class="inp" />
+            <input v-model.trim="form.venue" type="text" placeholder="The Closet, Grand Anse Shopping Center" class="inp" />
           </label>
           <label class="flex items-end pb-2.5">
             <span class="flex items-center gap-2 text-sm text-ink/70">
