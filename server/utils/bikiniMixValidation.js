@@ -172,6 +172,9 @@ export function validateEventFields(body, { partial = true } = {}) {
   if (provided('promoVideoUrl')) {
     out.promoVideoUrl = isEmpty(b.promoVideoUrl) ? null : str(b.promoVideoUrl)
   }
+  if (provided('promoVideoThumbnailUrl')) {
+    out.promoVideoThumbnailUrl = isEmpty(b.promoVideoThumbnailUrl) ? null : str(b.promoVideoThumbnailUrl)
+  }
 
   if (provided('topSizeGuide')) {
     const { issues: i, values } = validateSizeGuide(b.topSizeGuide, 'Top size guide', ['bust', 'underbust'])

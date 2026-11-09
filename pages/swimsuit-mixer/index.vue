@@ -33,14 +33,19 @@
             :booking-deadline="event.bookingDeadline"
             :is-bookings-open="event.isBookingsOpen"
             :promo-video-url="event.promoVideoUrl"
+            :promo-video-thumbnail-url="event.promoVideoThumbnailUrl"
             :regular-price-xcd-cents="event.regularPriceXcdCents"
             :early-bird-price-xcd-cents="event.earlyBirdPriceXcdCents"
             :early-bird-slots="event.earlyBirdSlots"
             :early-bird-remaining="event.earlyBirdRemaining"
             :early-bird-available="event.earlyBirdAvailable"
             :ticket-inclusions="event.ticketInclusions"
+            :gallery-images="galleryImages"
+            :gallery-pending="galleryPending"
+            :gallery-error="galleryError"
             @continue="goTo(2)"
-            @open-gallery="galleryOpen = true"
+            @open-gallery-at="(i) => (lightboxIndex = i)"
+            @retry-gallery="refreshGallery"
           />
 
           <!-- Admin-only test-mode entry point. Only ever rendered after a
@@ -60,7 +65,7 @@
             :fabrics="fabrics"
             :bottom-size-guide="event.bottomSizeGuide"
             @set-garment-type="setGarmentType"
-            @open-gallery="galleryOpen = true"
+            @open-gallery="lightboxIndex = 0"
           />
           <div class="mx-auto mt-10 flex max-w-3xl items-center justify-between">
             <button type="button" class="btn-outline" @click="goTo(1)">← Back</button>
@@ -112,7 +117,7 @@
       </div>
     </div>
 
-    <BikiniMixCustomerCustomizationGallery v-model="galleryOpen" />
+    <BikiniMixCustomerGalleryLightbox :images="galleryImages" :open-index="lightboxIndex" @update:open-index="lightboxIndex = $event" />
   </div>
 </template>
 
@@ -124,6 +129,7 @@ useHead({ title: 'The Swimsuit Mixer — Bahama Mama Swimwear' })
 
 const { event, pending: eventPending, error: eventError, refresh: refreshEvent } = await useBikiniMixEvent()
 const { fabrics, pending: fabricsPending, error: fabricsError, refresh: refreshFabrics } = await useBikiniMixFabrics()
+const { images: galleryImages, pending: galleryPending, error: galleryError, refresh: refreshGallery } = await useBikiniMixGallery()
 const { currentStep, build, details, marketingOptIn, policyAccepted, setGarmentType } = useBikiniMixBooking()
 
 // No mock fallback for either fetch — a failure on either one blocks the
@@ -143,7 +149,7 @@ function goTo(step) {
   if (import.meta.client) window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-const galleryOpen = ref(false)
+const lightboxIndex = ref(null)
 
 // ── Admin-only test mode ──────────────────────────────────────────────────
 // isAdminTester is set ONLY by a successful call to a real requireAdmin()

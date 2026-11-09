@@ -21,6 +21,7 @@ export function mockEvent() {
     capacity: 12,
     isBookingsOpen: true,
     promoVideoUrl: null,
+    promoVideoThumbnailUrl: null,
     regularPriceXcdCents: 25000,
     earlyBirdPriceXcdCents: 22500,
     earlyBirdSlots: 3,

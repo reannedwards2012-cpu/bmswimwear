@@ -22,6 +22,7 @@ const COLUMN_BY_FIELD = {
   capacity: 'capacity',
   isBookingsOpen: 'is_bookings_open',
   promoVideoUrl: 'promo_video_url',
+  promoVideoThumbnailUrl: 'promo_video_thumbnail_url',
   regularPriceXcdCents: 'regular_price_xcd_cents',
   earlyBirdPriceXcdCents: 'early_bird_price_xcd_cents',
   earlyBirdSlots: 'early_bird_slots',

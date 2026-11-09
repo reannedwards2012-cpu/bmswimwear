@@ -54,6 +54,13 @@ describe('validateEventFields', () => {
     expect(issues.length).toBeGreaterThan(0)
   })
 
+  it('promoVideoThumbnailUrl: empty string normalizes to null; a real value passes through', () => {
+    expect(validateEventFields({ promoVideoThumbnailUrl: '' }, { partial: true }).fields.promoVideoThumbnailUrl).toBeNull()
+    const ok = validateEventFields({ promoVideoThumbnailUrl: 'https://proj.supabase.co/.../thumb.jpg' }, { partial: true })
+    expect(ok.issues).toEqual([])
+    expect(ok.fields.promoVideoThumbnailUrl).toBe('https://proj.supabase.co/.../thumb.jpg')
+  })
+
   it('boolean toggles must actually be booleans', () => {
     expect(validateEventFields({ isBookingsOpen: 'yes' }, { partial: true }).issues.length).toBeGreaterThan(0)
     const ok = validateEventFields({ isBookingsOpen: true }, { partial: true })

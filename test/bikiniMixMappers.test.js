@@ -14,6 +14,7 @@ function eventRow(overrides = {}) {
     capacity: 12,
     is_bookings_open: false,
     promo_video_url: null,
+    promo_video_thumbnail_url: null,
     regular_price_xcd_cents: 25000,
     early_bird_price_xcd_cents: 22500,
     early_bird_slots: 3,
@@ -87,6 +88,13 @@ describe('mapPublicEvent', () => {
   it('never goes negative, even if more are used than slots allow', () => {
     const mapped = mapPublicEvent(eventRow({ early_bird_slots: 3 }), false, -2)
     expect(mapped.earlyBirdRemaining).toBe(0)
+  })
+
+  it('carries the video thumbnail URL through, null when not set', () => {
+    expect(mapPublicEvent(eventRow()).promoVideoThumbnailUrl).toBeNull()
+    expect(mapPublicEvent(eventRow({ promo_video_thumbnail_url: 'https://proj.supabase.co/.../thumb.jpg' })).promoVideoThumbnailUrl).toBe(
+      'https://proj.supabase.co/.../thumb.jpg'
+    )
   })
 })
 

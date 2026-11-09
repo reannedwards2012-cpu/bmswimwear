@@ -8,6 +8,7 @@ export const formatBookingNumber = (n) => `BKM-${String(n).padStart(6, '0')}`
 export const EVENT_SELECT = `
   id, event_name, event_date, event_date_is_tentative, venue, venue_is_confirmed,
   booking_deadline, cancellation_deadline, capacity, is_bookings_open, promo_video_url,
+  promo_video_thumbnail_url,
   regular_price_xcd_cents, early_bird_price_xcd_cents, early_bird_slots, ticket_inclusions,
   hold_minutes, top_size_guide, bottom_size_guide, updated_at
 `.trim()
@@ -24,6 +25,7 @@ export const EVENT_SELECT = `
 export const PUBLIC_EVENT_SELECT = `
   event_name, event_date, event_date_is_tentative, venue, venue_is_confirmed,
   booking_deadline, cancellation_deadline, is_bookings_open, promo_video_url,
+  promo_video_thumbnail_url,
   regular_price_xcd_cents, early_bird_price_xcd_cents, early_bird_slots, ticket_inclusions,
   top_size_guide, bottom_size_guide
 `.trim()
@@ -55,6 +57,7 @@ export function mapPublicEvent(row, earlyBirdAvailable, earlyBirdRemaining) {
     cancellationDeadline: row.cancellation_deadline,
     isBookingsOpen: row.is_bookings_open,
     promoVideoUrl: row.promo_video_url,
+    promoVideoThumbnailUrl: row.promo_video_thumbnail_url,
     regularPriceXcdCents: row.regular_price_xcd_cents,
     earlyBirdPriceXcdCents: row.early_bird_price_xcd_cents,
     earlyBirdSlots: row.early_bird_slots,
@@ -91,6 +94,7 @@ export function mapEvent(row) {
     capacity: row.capacity,
     isBookingsOpen: row.is_bookings_open,
     promoVideoUrl: row.promo_video_url,
+    promoVideoThumbnailUrl: row.promo_video_thumbnail_url,
     regularPriceXcdCents: row.regular_price_xcd_cents,
     earlyBirdPriceXcdCents: row.early_bird_price_xcd_cents,
     earlyBirdSlots: row.early_bird_slots,

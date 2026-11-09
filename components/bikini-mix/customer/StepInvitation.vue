@@ -20,8 +20,33 @@
       <!-- 2. introductory video -->
       <div class="mx-auto mt-6 max-w-xl">
         <div class="relative aspect-video overflow-hidden rounded-3xl bg-mixer-blush/30 shadow-card">
-          <video v-if="promoVideoUrl" :src="promoVideoUrl" controls class="h-full w-full object-cover" />
-          <div v-else class="absolute inset-0 flex flex-col items-center justify-center gap-2.5 text-mixer-ink/45">
+          <video
+            v-if="promoVideoUrl"
+            ref="videoEl"
+            :src="promoVideoUrl"
+            :poster="promoVideoThumbnailUrl || undefined"
+            controls
+            playsinline
+            class="h-full w-full object-cover"
+            @play="videoStarted = true"
+          />
+          <button
+            v-if="showPlayOverlay"
+            type="button"
+            class="absolute inset-0 flex items-center justify-center bg-ink/10 transition-colors hover:bg-ink/20"
+            aria-label="Play video"
+            @click="playVideo"
+          >
+            <span
+              class="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 text-mixer-coral shadow-soft transition duration-200 hover:scale-105"
+              aria-hidden="true"
+            >
+              <svg class="ml-1 h-6 w-6" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M4 2.8c0-.7.76-1.14 1.37-.77l8.2 4.95a.9.9 0 0 1 0 1.54l-8.2 4.95A.9.9 0 0 1 4 12.5V2.8Z" />
+              </svg>
+            </span>
+          </button>
+          <div v-if="!promoVideoUrl" class="absolute inset-0 flex flex-col items-center justify-center gap-2.5 text-mixer-ink/45">
             <span class="flex h-12 w-12 items-center justify-center rounded-full bg-mixer-coral/15 text-mixer-coral" aria-hidden="true">
               <svg class="ml-0.5 h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M4 2.8c0-.7.76-1.14 1.37-.77l8.2 4.95a.9.9 0 0 1 0 1.54l-8.2 4.95A.9.9 0 0 1 4 12.5V2.8Z" />
@@ -122,11 +147,16 @@
           <p class="text-sm font-semibold text-mixer-ink">Bookings aren't open just yet</p>
           <p class="mt-1 text-xs text-mixer-ink/55">Check back soon, or follow along for the announcement.</p>
         </div>
-        <button type="button" class="text-xs font-semibold text-mixer-ink/45 underline decoration-dotted underline-offset-4 hover:text-mixer-coral" @click="$emit('open-gallery')">
-          See photos &amp; customization materials →
-        </button>
       </div>
     </section>
+
+    <BikiniMixCustomerGalleryGrid
+      :images="galleryImages"
+      :pending="galleryPending"
+      :error="galleryError"
+      @open="(i) => $emit('open-gallery-at', i)"
+      @retry="$emit('retry-gallery')"
+    />
   </div>
 </template>
 
@@ -146,6 +176,7 @@ const props = defineProps({
   bookingDeadline: String,
   isBookingsOpen: Boolean,
   promoVideoUrl: String,
+  promoVideoThumbnailUrl: String,
   regularPriceXcdCents: Number,
   earlyBirdPriceXcdCents: Number,
   earlyBirdSlots: Number,
@@ -154,9 +185,19 @@ const props = defineProps({
   // if a caller doesn't pass one, so this stays backward-compatible.
   earlyBirdRemaining: { type: Number, default: null },
   earlyBirdAvailable: Boolean,
-  ticketInclusions: { type: Array, default: () => [] }
+  ticketInclusions: { type: Array, default: () => [] },
+  galleryImages: { type: Array, default: () => [] },
+  galleryPending: { type: Boolean, default: false },
+  galleryError: { type: [Boolean, Object, Error], default: null }
 })
-defineEmits(['continue', 'open-gallery'])
+defineEmits(['continue', 'open-gallery-at', 'retry-gallery'])
+
+const videoEl = ref(null)
+const videoStarted = ref(false)
+const showPlayOverlay = computed(() => Boolean(props.promoVideoUrl) && Boolean(props.promoVideoThumbnailUrl) && !videoStarted.value)
+function playVideo() {
+  videoEl.value?.play()
+}
 
 function formatDate(iso) {
   if (!iso) return 'Date TBA'

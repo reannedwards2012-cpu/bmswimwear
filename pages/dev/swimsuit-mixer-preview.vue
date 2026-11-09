@@ -33,14 +33,16 @@
             :booking-deadline="event.bookingDeadline"
             :is-bookings-open="isBookingsOpen"
             :promo-video-url="event.promoVideoUrl"
+            :promo-video-thumbnail-url="event.promoVideoThumbnailUrl"
             :regular-price-xcd-cents="event.regularPriceXcdCents"
             :early-bird-price-xcd-cents="event.earlyBirdPriceXcdCents"
             :early-bird-slots="event.earlyBirdSlots"
             :early-bird-remaining="earlyBirdRemaining"
             :early-bird-available="earlyBirdAvailable"
             :ticket-inclusions="event.ticketInclusions"
+            :gallery-images="galleryImages"
             @continue="goTo(2)"
-            @open-gallery="galleryOpen = true"
+            @open-gallery-at="(i) => (lightboxIndex = i)"
           />
         </template>
 
@@ -50,7 +52,7 @@
             :fabrics="fabrics"
             :bottom-size-guide="event.bottomSizeGuide"
             @set-garment-type="setGarmentType"
-            @open-gallery="galleryOpen = true"
+            @open-gallery="lightboxIndex = 0"
           />
           <div class="mx-auto mt-10 flex max-w-3xl items-center justify-between">
             <button type="button" class="btn-outline" @click="goTo(1)">← Back</button>
@@ -87,7 +89,7 @@
       </div>
     </div>
 
-    <BikiniMixCustomerCustomizationGallery v-model="galleryOpen" :preview-images="galleryImages" />
+    <BikiniMixCustomerGalleryLightbox :images="galleryImages" :open-index="lightboxIndex" @update:open-index="lightboxIndex = $event" />
   </div>
 </template>
 
@@ -115,6 +117,7 @@ const event = ref({
   venueIsConfirmed: true,
   bookingDeadline: '2026-12-05',
   promoVideoUrl: null,
+  promoVideoThumbnailUrl: null,
   regularPriceXcdCents: 25000,
   earlyBirdPriceXcdCents: 22500,
   earlyBirdSlots: 3,
@@ -181,7 +184,13 @@ const galleryImages = ref([
   { id: 'g1', imageUrl: swatch('%23E6397C'), caption: 'Gold chain strap', category: 'strap', includedInTicket: false },
   { id: 'g2', imageUrl: swatch('%23F3EFE8'), caption: 'Pearl beads', category: 'bead', includedInTicket: false },
   { id: 'g3', imageUrl: swatch('%2326408B'), caption: 'Shell charm', category: 'charm', includedInTicket: false },
-  { id: 'g4', imageUrl: swatch('%232A8C82'), caption: 'Finished bikini example', category: 'finished_swimsuit', includedInTicket: true }
+  { id: 'g4', imageUrl: swatch('%232A8C82'), caption: 'Finished bikini example', category: 'finished_swimsuit', includedInTicket: true },
+  { id: 'g5', imageUrl: swatch('%23C1974A'), caption: 'Rhinestone trim', category: 'rhinestone', includedInTicket: true },
+  { id: 'g6', imageUrl: swatch('%23D98278'), caption: 'Iron-on palm leaf', category: 'iron_on', includedInTicket: false },
+  { id: 'g7', imageUrl: swatch('%23493A36'), caption: 'Beaded fringe', category: 'bead', includedInTicket: false },
+  { id: 'g8', imageUrl: swatch('%23F2A9B6'), caption: 'Finished one-piece example', category: 'finished_swimsuit', includedInTicket: true },
+  { id: 'g9', imageUrl: swatch('%237BC9EF'), caption: 'Charm cluster', category: 'charm', includedInTicket: false },
+  { id: 'g10', imageUrl: swatch('%23F62BAD'), caption: 'Clear strap option', category: 'strap', includedInTicket: false }
 ])
 
 // ── local booking state — deliberately PLAIN local refs, not
@@ -220,7 +229,7 @@ function resetFlow() {
   policyAccepted.value = false
 }
 
-const galleryOpen = ref(false)
+const lightboxIndex = ref(null)
 
 const buildComplete = computed(() => {
   const b = build.value

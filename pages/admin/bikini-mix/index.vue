@@ -192,7 +192,13 @@
       <section class="rounded-4xl bg-cream p-6 shadow-card md:p-7">
         <h2 class="font-display text-lg font-semibold text-ink">Promotional Video</h2>
         <div class="mt-4 flex flex-wrap items-center gap-4">
-          <video v-if="form.promoVideoUrl" :src="form.promoVideoUrl" controls class="h-32 w-48 rounded-2xl bg-ink/5 object-cover" />
+          <video
+            v-if="form.promoVideoUrl"
+            :src="form.promoVideoUrl"
+            :poster="form.promoVideoThumbnailUrl || undefined"
+            controls
+            class="h-32 w-48 rounded-2xl bg-ink/5 object-cover"
+          />
           <span v-else class="grid h-32 w-48 place-items-center rounded-2xl border border-dashed border-ink/25 text-xs text-ink/40">
             No video yet
           </span>
@@ -206,6 +212,39 @@
             </button>
             <input ref="fileInput" type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" @change="onVideoFile" />
             <p v-if="videoError" class="text-xs text-coral">{{ videoError }}</p>
+          </div>
+        </div>
+
+        <div class="mt-6 flex flex-wrap items-center gap-4 border-t border-ink/10 pt-5">
+          <div>
+            <img
+              v-if="form.promoVideoThumbnailUrl"
+              :src="form.promoVideoThumbnailUrl"
+              alt=""
+              class="h-20 w-32 rounded-2xl bg-ink/5 object-cover"
+            />
+            <span v-else class="grid h-20 w-32 place-items-center rounded-2xl border border-dashed border-ink/25 text-xs text-ink/40">
+              No thumbnail
+            </span>
+          </div>
+          <div class="space-y-2">
+            <p class="text-xs font-semibold text-ink/70">Video thumbnail</p>
+            <p class="max-w-xs text-[0.65rem] text-ink/45">
+              Shown as the video's poster image, with a play button, before a visitor presses play.
+            </p>
+            <button type="button" class="btn-outline px-4 py-1.5 text-xs" :disabled="uploadingThumbnail" @click="thumbnailFileInput?.click()">
+              {{ uploadingThumbnail ? 'Uploading…' : form.promoVideoThumbnailUrl ? 'Replace thumbnail' : 'Upload thumbnail' }}
+            </button>
+            <button
+              v-if="form.promoVideoThumbnailUrl && !uploadingThumbnail"
+              type="button"
+              class="block text-xs text-ink/45 hover:text-coral"
+              @click="form.promoVideoThumbnailUrl = ''"
+            >
+              Remove
+            </button>
+            <input ref="thumbnailFileInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="onThumbnailFile" />
+            <p v-if="thumbnailError" class="text-xs text-coral">{{ thumbnailError }}</p>
           </div>
         </div>
       </section>
@@ -295,6 +334,7 @@ function fromEvent(e) {
     holdMinutes: e.holdMinutes ?? 15,
     isBookingsOpen: e.isBookingsOpen ?? false,
     promoVideoUrl: e.promoVideoUrl ?? '',
+    promoVideoThumbnailUrl: e.promoVideoThumbnailUrl ?? '',
     regularPriceXcdCents: centsToInput(e.regularPriceXcdCents),
     earlyBirdPriceXcdCents: centsToInput(e.earlyBirdPriceXcdCents),
     earlyBirdSlots: e.earlyBirdSlots ?? 3,
@@ -371,6 +411,43 @@ async function onVideoFile(e) {
   }
 }
 
+// ── thumbnail upload ──
+// Plain server-side multipart upload (mirrors server/api/admin/fabrics/
+// image.post.js) — a poster image is capped at 5MB, safely under Netlify's
+// synchronous-function payload ceiling, so this doesn't need the video's
+// signed-URL direct-to-Storage flow.
+const thumbnailFileInput = ref(null)
+const uploadingThumbnail = ref(false)
+const thumbnailError = ref('')
+const ALLOWED_THUMBNAIL_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const MAX_THUMBNAIL_BYTES = 5 * 1024 * 1024
+
+async function onThumbnailFile(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''
+  if (!file) return
+  thumbnailError.value = ''
+  if (!ALLOWED_THUMBNAIL_TYPES.includes(file.type)) {
+    thumbnailError.value = 'Please choose a JPEG, PNG or WebP image.'
+    return
+  }
+  if (file.size > MAX_THUMBNAIL_BYTES) {
+    thumbnailError.value = 'Image is too large — under 5MB please.'
+    return
+  }
+  uploadingThumbnail.value = true
+  try {
+    const body = new FormData()
+    body.append('file', file)
+    const { url } = await authedFetch('/api/admin/bikini-mix/video-thumbnail-image', { method: 'POST', body })
+    form.value.promoVideoThumbnailUrl = url
+  } catch (err) {
+    thumbnailError.value = err?.data?.error || err?.message || 'Upload failed — try again.'
+  } finally {
+    uploadingThumbnail.value = false
+  }
+}
+
 // ── save ──
 const saving = ref(false)
 const formError = ref('')
@@ -413,6 +490,7 @@ async function onSave() {
     holdMinutes: form.value.holdMinutes === '' ? undefined : Number(form.value.holdMinutes),
     isBookingsOpen: form.value.isBookingsOpen,
     promoVideoUrl: form.value.promoVideoUrl || null,
+    promoVideoThumbnailUrl: form.value.promoVideoThumbnailUrl || null,
     regularPriceXcdCents: toCentsOrNull(form.value.regularPriceXcdCents),
     earlyBirdPriceXcdCents: toCentsOrNull(form.value.earlyBirdPriceXcdCents),
     earlyBirdSlots: form.value.earlyBirdSlots === '' ? undefined : Number(form.value.earlyBirdSlots),
