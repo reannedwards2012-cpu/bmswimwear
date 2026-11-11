@@ -23,6 +23,7 @@ import { supabaseAdmin } from '../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../utils/authUser.js'
 import { formatBookingNumber } from '../../../utils/bikiniMixMappers.js'
 import { isMigrationNotAppliedError } from '../../../utils/bikiniMixMigrationGuard.js'
+import { CATEGORY_LABELS } from '../../../utils/bikiniMixInvitationCodes.js'
 
 function groupCount(rows, keyFn) {
   const totals = new Map()
@@ -43,7 +44,7 @@ export default defineEventHandler(async (event) => {
     const { data, error } = await supabase
       .from('bikini_mix_bookings')
       .select(
-        'id, booking_number, full_name, package, garment_type, bottom_scrunch, top_size, left_fabric_name_snapshot, right_fabric_name_snapshot, bottom_style, bottom_coverage, bottom_size, bottom_fabric_name_snapshot, onepiece_size, onepiece_coverage, onepiece_fabric_name_snapshot, early_bird_applied, base_prepared_at'
+        'id, booking_number, full_name, package, garment_type, bottom_scrunch, top_size, left_fabric_name_snapshot, right_fabric_name_snapshot, bottom_style, bottom_coverage, bottom_size, bottom_fabric_name_snapshot, onepiece_size, onepiece_coverage, onepiece_fabric_name_snapshot, early_bird_applied, is_complimentary, invitation_category, base_prepared_at'
       )
       .eq('status', 'confirmed')
       .eq('is_test', false)
@@ -83,7 +84,14 @@ export default defineEventHandler(async (event) => {
       bookingNumber: formatBookingNumber(r.booking_number),
       fullName: r.full_name,
       garmentType: r.garment_type,
-      ticketTier: r.package === 'ticket' ? (r.early_bird_applied ? 'Early Bird' : 'Regular') : r.package === 'the_works' ? 'The Works (legacy)' : 'Classic Mix (legacy)',
+      isComplimentary: r.is_complimentary === true,
+      ticketTier: r.is_complimentary
+        ? `Complimentary (${CATEGORY_LABELS[r.invitation_category] || r.invitation_category})`
+        : r.package === 'ticket'
+          ? (r.early_bird_applied ? 'Early Bird' : 'Regular')
+          : r.package === 'the_works'
+            ? 'The Works (legacy)'
+            : 'Classic Mix (legacy)',
       topSize: r.top_size,
       leftFabricName: r.left_fabric_name_snapshot,
       rightFabricName: r.right_fabric_name_snapshot,

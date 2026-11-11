@@ -11,6 +11,7 @@ import { supabaseAdmin } from '../../../../utils/supabaseAdmin.js'
 import { requireAdmin } from '../../../../utils/authUser.js'
 import { formatBookingNumber } from '../../../../utils/bikiniMixMappers.js'
 import { isMigrationNotAppliedError } from '../../../../utils/bikiniMixMigrationGuard.js'
+import { CATEGORY_LABELS } from '../../../../utils/bikiniMixInvitationCodes.js'
 
 const COLUMNS = [
   'Booking Reference',
@@ -56,7 +57,7 @@ export default defineEventHandler(async (event) => {
     const { data, error } = await supabase
       .from('bikini_mix_bookings')
       .select(
-        'booking_number, full_name, email, whatsapp, package, garment_type, early_bird_applied, top_size, left_fabric_name_snapshot, right_fabric_name_snapshot, bottom_size, bottom_fabric_name_snapshot, bottom_style, bottom_coverage, bottom_scrunch, onepiece_size, onepiece_coverage, onepiece_fabric_name_snapshot, personalization_name, bust_inches, underbust_inches, waist_inches, hips_inches, charged_usd_cents, created_at'
+        'booking_number, full_name, email, whatsapp, package, garment_type, early_bird_applied, is_complimentary, invitation_category, top_size, left_fabric_name_snapshot, right_fabric_name_snapshot, bottom_size, bottom_fabric_name_snapshot, bottom_style, bottom_coverage, bottom_scrunch, onepiece_size, onepiece_coverage, onepiece_fabric_name_snapshot, personalization_name, bust_inches, underbust_inches, waist_inches, hips_inches, charged_usd_cents, created_at'
       )
       .eq('status', 'confirmed')
       .eq('is_test', false)
@@ -73,7 +74,13 @@ export default defineEventHandler(async (event) => {
     }
 
     const ticketTier = (r) =>
-      r.package === 'ticket' ? (r.early_bird_applied ? 'Early Bird' : 'Regular') : r.package === 'the_works' ? 'The Works (legacy)' : 'Classic Mix (legacy)'
+      r.is_complimentary
+        ? `Complimentary (${CATEGORY_LABELS[r.invitation_category] || r.invitation_category})`
+        : r.package === 'ticket'
+          ? (r.early_bird_applied ? 'Early Bird' : 'Regular')
+          : r.package === 'the_works'
+            ? 'The Works (legacy)'
+            : 'Classic Mix (legacy)'
 
     const rows = (data ?? []).map((r) => [
       formatBookingNumber(r.booking_number),

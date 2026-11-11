@@ -10,6 +10,7 @@ export const EVENT_SELECT = `
   booking_deadline, cancellation_deadline, capacity, is_bookings_open, promo_video_url,
   promo_video_thumbnail_url,
   regular_price_xcd_cents, early_bird_price_xcd_cents, early_bird_slots, ticket_inclusions,
+  comp_event_assistant_slots, comp_giveaway_slots, comp_other_slots,
   hold_minutes, top_size_guide, bottom_size_guide, updated_at
 `.trim()
 
@@ -99,6 +100,9 @@ export function mapEvent(row) {
     earlyBirdPriceXcdCents: row.early_bird_price_xcd_cents,
     earlyBirdSlots: row.early_bird_slots,
     ticketInclusions: row.ticket_inclusions ?? [],
+    compEventAssistantSlots: row.comp_event_assistant_slots,
+    compGiveawaySlots: row.comp_giveaway_slots,
+    compOtherSlots: row.comp_other_slots,
     holdMinutes: row.hold_minutes,
     topSizeGuide,
     bottomSizeGuide,
@@ -147,6 +151,7 @@ export function mapBikiniMixFabric(row) {
 export const BOOKING_LIST_SELECT = `
   id, booking_number, status, hold_expires_at, package, retail_price_xcd_cents, charged_usd_cents,
   garment_type, early_bird_quoted, early_bird_applied, early_bird_mismatch_at,
+  is_complimentary, invitation_category,
   full_name, email, whatsapp, paid_at, created_at, is_test
 `.trim()
 
@@ -161,6 +166,7 @@ export const BOOKING_DETAIL_SELECT = `
   onepiece_fabric_id, onepiece_fabric_name_snapshot, onepiece_fabric_hex_snapshot,
   bust_inches, underbust_inches, waist_inches, hips_inches,
   early_bird_quoted, early_bird_applied, early_bird_mismatch_at,
+  is_complimentary, invitation_category, invitation_code_id,
   full_name, email, whatsapp, personalization_name, marketing_opt_in, terms_accepted_at,
   payment_provider, go2pay_order_id, payment_id, paid_at, admin_notes,
   paid_email_sent_at, base_prepared_at, is_test, created_at, updated_at
@@ -187,6 +193,8 @@ export function mapBookingListItem(row) {
     earlyBirdQuoted: row.early_bird_quoted === true,
     earlyBirdApplied: row.early_bird_applied === true,
     earlyBirdMismatch: row.early_bird_mismatch_at != null,
+    isComplimentary: row.is_complimentary === true,
+    invitationCategory: row.invitation_category ?? null,
     fullName: row.full_name,
     email: row.email,
     whatsapp: row.whatsapp,
@@ -210,6 +218,9 @@ export function mapBookingDetail(row) {
     earlyBirdQuoted: row.early_bird_quoted === true,
     earlyBirdApplied: row.early_bird_applied === true,
     earlyBirdMismatchAt: row.early_bird_mismatch_at,
+    isComplimentary: row.is_complimentary === true,
+    invitationCategory: row.invitation_category ?? null,
+    invitationCodeId: row.invitation_code_id ?? null,
     topSize: row.top_size,
     leftFabricId: row.left_fabric_id,
     leftFabricName: row.left_fabric_name_snapshot,
@@ -258,6 +269,23 @@ export function mapBookingDetail(row) {
 export const GALLERY_IMAGE_SELECT = `
   id, image_url, caption, category, included_in_ticket, sort_order, is_active, created_at
 `.trim()
+
+// ── complimentary invitation codes — admin listing only, never the plaintext ──
+export const INVITATION_CODE_SELECT = `
+  id, category, status, notes, redeemed_by_booking_id, redeemed_at, created_at
+`.trim()
+
+export function mapInvitationCode(row) {
+  return {
+    id: row.id,
+    category: row.category,
+    status: row.status,
+    notes: row.notes,
+    redeemedByBookingId: row.redeemed_by_booking_id,
+    redeemedAt: row.redeemed_at,
+    createdAt: row.created_at
+  }
+}
 
 export function mapGalleryImage(row) {
   return {

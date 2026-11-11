@@ -341,6 +341,7 @@ describe('GET /api/admin/bikini-mix/production-summary', () => {
         bookingNumber: 'BKM-000007',
         fullName: 'Jane Guest',
         garmentType: 'bikini',
+        isComplimentary: false,
         ticketTier: 'The Works (legacy)',
         topSize: 'M',
         leftFabricName: 'Teal',

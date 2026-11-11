@@ -27,6 +27,9 @@
           <p class="mt-1 text-sm text-ink/50">{{ formatDate(booking.createdAt) }}</p>
         </div>
         <div class="flex items-center gap-2">
+          <span v-if="booking.isComplimentary" class="rounded-full bg-seafoam px-3 py-1.5 text-xs font-semibold text-ink">
+            🎁 Complimentary · {{ CATEGORY_LABELS[booking.invitationCategory] || booking.invitationCategory }}
+          </span>
           <span v-if="booking.earlyBirdApplied" class="rounded-full bg-coral/15 px-3 py-1.5 text-xs font-semibold text-coral">Early Bird</span>
           <span class="rounded-full px-4 py-1.5 text-xs font-semibold" :class="statusClass(booking.displayStatus)">
             {{ statusLabel(booking.displayStatus) }}
@@ -106,13 +109,24 @@
               <div class="flex justify-between">
                 <dt class="text-ink/45">Ticket tier</dt>
                 <dd class="text-ink">
-                  <template v-if="booking.package === 'ticket'">{{ booking.earlyBirdApplied ? 'Early Bird' : 'Regular' }}</template>
+                  <template v-if="booking.isComplimentary">Complimentary — {{ CATEGORY_LABELS[booking.invitationCategory] || booking.invitationCategory }}</template>
+                  <template v-else-if="booking.package === 'ticket'">{{ booking.earlyBirdApplied ? 'Early Bird' : 'Regular' }}</template>
                   <template v-else>{{ booking.package === 'the_works' ? 'The Works (legacy)' : 'Classic Mix (legacy)' }}</template>
                 </dd>
               </div>
-              <div class="flex justify-between"><dt class="text-ink/45">Retail price (EC$)</dt><dd class="text-ink">{{ formatMoney(booking.retailPriceXcdCents, 'XCD') }}</dd></div>
-              <div class="flex justify-between"><dt class="text-ink/45">Charged (USD)</dt><dd class="text-ink">{{ booking.chargedUsdCents != null ? formatMoney(booking.chargedUsdCents, 'USD') : '—' }}</dd></div>
-              <div class="flex justify-between"><dt class="text-ink/45">Paid at</dt><dd class="text-ink">{{ booking.paidAt ? formatDate(booking.paidAt) : 'Not yet paid' }}</dd></div>
+              <div v-if="!booking.isComplimentary" class="flex justify-between"><dt class="text-ink/45">Retail price (EC$)</dt><dd class="text-ink">{{ formatMoney(booking.retailPriceXcdCents, 'XCD') }}</dd></div>
+              <div class="flex justify-between">
+                <dt class="text-ink/45">Charged (USD)</dt>
+                <dd class="text-ink">
+                  <template v-if="booking.isComplimentary">Complimentary — no payment</template>
+                  <template v-else-if="booking.chargedUsdCents != null">{{ formatMoney(booking.chargedUsdCents, 'USD') }}</template>
+                  <template v-else>—</template>
+                </dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="text-ink/45">{{ booking.isComplimentary ? 'Confirmed at' : 'Paid at' }}</dt>
+                <dd class="text-ink">{{ booking.paidAt ? formatDate(booking.paidAt) : 'Not yet paid' }}</dd>
+              </div>
             </dl>
           </section>
 
@@ -242,6 +256,7 @@ const STATUS_LABELS = {
 }
 const statusClass = (s) => STATUS_STYLES[s] || 'bg-shell text-ink/70'
 const statusLabel = (s) => STATUS_LABELS[s] || s
+const CATEGORY_LABELS = { event_assistant: 'Event Assistant', giveaway: 'Giveaway', other: 'Other' }
 
 function formatDate(iso) {
   try {

@@ -227,7 +227,7 @@ const CATEGORY_MAP = {
   'Straps included': 'Your Swimsuit',
   Straps: 'Your Swimsuit',
   'Up to 6 premium beads': 'Your Customizations',
-  'Up to 4 pony beads': 'Your Customizations',
+  'Up to 6 pony beads': 'Your Customizations',
   '1 premium charm': 'Your Customizations',
   '2 basic charms': 'Your Customizations',
   '1 iron-on decal': 'Your Customizations',

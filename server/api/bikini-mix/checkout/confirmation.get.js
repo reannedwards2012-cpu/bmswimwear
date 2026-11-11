@@ -52,6 +52,8 @@ export default defineEventHandler(async (event) => {
         status: booking.status,
         fullName: booking.fullName,
         package: booking.package,
+        isComplimentary: booking.isComplimentary,
+        invitationCategory: booking.invitationCategory,
         retailPriceXcdCents: booking.retailPriceXcdCents,
         chargedUsdCents: booking.chargedUsdCents,
         topSize: booking.topSize,

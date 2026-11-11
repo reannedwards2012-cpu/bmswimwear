@@ -23,10 +23,14 @@
       <div v-else class="mx-auto max-w-xl text-center">
         <p class="text-3xl">🍹</p>
         <h1 class="mt-3 font-display text-3xl font-semibold text-ink md:text-4xl">
-          {{ confirmed ? "You're on the list!" : 'Payment Received' }}
+          {{ isComplimentary ? "You're confirmed — as our guest!" : confirmed ? "You're on the list!" : 'Payment Received' }}
         </h1>
         <p class="mt-4 leading-relaxed text-ink/70">
-          <template v-if="confirmed">
+          <template v-if="isComplimentary">
+            Your complimentary {{ complimentaryCategoryLabel }} spot at {{ eventName }} is confirmed — no payment was
+            needed. We can't wait to see what you create! A confirmation email is on its way.
+          </template>
+          <template v-else-if="confirmed">
             Your spot at {{ eventName }} is confirmed. We can't wait to see what you create! A confirmation email is
             on its way.
           </template>
@@ -41,11 +45,12 @@
           <dl class="space-y-2 text-sm text-ink/70">
             <div class="flex justify-between gap-3"><dt class="text-ink/45">Booking reference</dt><dd class="font-semibold text-ink">{{ booking.bookingNumber }}</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-ink/45">Guest</dt><dd>{{ booking.fullName }}</dd></div>
-            <div class="flex justify-between gap-3"><dt class="text-ink/45">Package</dt><dd>{{ booking.package === 'the_works' ? 'The Works' : 'Classic Mix' }}</dd></div>
+            <div v-if="isComplimentary" class="flex justify-between gap-3"><dt class="text-ink/45">Registration</dt><dd>Complimentary — {{ complimentaryCategoryLabel }}</dd></div>
+            <div v-else class="flex justify-between gap-3"><dt class="text-ink/45">Package</dt><dd>{{ booking.package === 'the_works' ? 'The Works' : 'Classic Mix' }}</dd></div>
             <div v-if="booking.personalizationName" class="flex justify-between gap-3"><dt class="text-ink/45">Personalization</dt><dd>{{ booking.personalizationName }}</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-ink/45">Top</dt><dd>Size {{ booking.topSize }} — {{ booking.leftFabricName }} / {{ booking.rightFabricName }}</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-ink/45">Bottom</dt><dd>{{ booking.bottomStyle === 'tie-side' ? 'Tie-Side' : 'Classic' }}, {{ booking.bottomCoverage === 'cheeky' ? 'Cheeky' : 'Bikini' }} coverage, size {{ booking.bottomSize }} — {{ booking.bottomFabricName }}</dd></div>
-            <div class="flex justify-between gap-3 border-t border-ink/10 pt-2"><dt class="text-ink/45">Amount paid</dt><dd class="font-semibold text-ink">USD${{ (booking.chargedUsdCents / 100).toFixed(2) }}</dd></div>
+            <div v-if="!isComplimentary" class="flex justify-between gap-3 border-t border-ink/10 pt-2"><dt class="text-ink/45">Amount paid</dt><dd class="font-semibold text-ink">USD${{ (booking.chargedUsdCents / 100).toFixed(2) }}</dd></div>
             <div v-if="eventDateLabel" class="flex justify-between gap-3"><dt class="text-ink/45">Event date</dt><dd>{{ eventDateLabel }}</dd></div>
             <div v-if="venue" class="flex justify-between gap-3"><dt class="text-ink/45">Venue</dt><dd>{{ venue }}</dd></div>
           </dl>
@@ -79,6 +84,9 @@ const booking = ref(null)
 const eventName = ref('The Swimsuit Mixer')
 const eventDateLabel = ref('')
 const venue = ref('')
+const isComplimentary = computed(() => booking.value?.isComplimentary === true)
+const COMP_CATEGORY_LABELS = { event_assistant: 'Event Assistant', giveaway: 'Giveaway', other: 'Complimentary' }
+const complimentaryCategoryLabel = computed(() => COMP_CATEGORY_LABELS[booking.value?.invitationCategory] || '')
 
 let timer
 let attempts = 0

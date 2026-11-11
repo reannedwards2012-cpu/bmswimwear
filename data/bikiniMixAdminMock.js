@@ -25,6 +25,9 @@ export function mockEvent() {
     regularPriceXcdCents: 25000,
     earlyBirdPriceXcdCents: 22500,
     earlyBirdSlots: 3,
+    compEventAssistantSlots: 2,
+    compGiveawaySlots: 1,
+    compOtherSlots: 0,
     ticketInclusions: [
       'Your choice of bikini or one-piece swimsuit',
       'Straps included',
@@ -213,11 +216,25 @@ export function mockBookings() {
       onepieceSize: null, onepieceCoverage: null, onepieceFabricId: null, onepieceFabricName: null, onepieceFabricHex: null,
       personalizationName: null, marketingOptIn: false, termsAcceptedAt: '2026-11-04T07:57:00Z', paymentProvider: 'go2pay', go2payOrderId: 'GP-TEST-1', paymentId: 'PAY-TEST-1',
       adminNotes: null, paidEmailSentAt: null, basePreparedAt: null
+    },
+    {
+      id: 'b9', bookingNumber: 'BKM-000009', status: 'confirmed', displayStatus: 'confirmed', package: 'ticket', garmentType: 'bikini',
+      retailPriceXcdCents: 0, chargedUsdCents: null, earlyBirdQuoted: false, earlyBirdApplied: false, earlyBirdMismatch: false,
+      isComplimentary: true, invitationCategory: 'event_assistant',
+      fullName: 'Tanya Mitchell', email: 'tanya@example.com', whatsapp: '+1 473 555 0109', paidAt: '2026-11-05T12:00:00Z', createdAt: '2026-11-05T11:58:00Z', isTest: false,
+      bottomScrunch: false, topSize: 'S', leftFabricId: '66d41852-404e-4dae-8dbd-7e3fd156669d', leftFabricName: 'Royal Blue', leftFabricHex: '#2252E5',
+      rightFabricId: '66d41852-404e-4dae-8dbd-7e3fd156669d', rightFabricName: 'Royal Blue', rightFabricHex: '#2252E5',
+      bottomStyle: 'tie-side', bottomCoverage: 'bikini', bottomSize: 'S', bottomFabricId: '66d41852-404e-4dae-8dbd-7e3fd156669d', bottomFabricName: 'Royal Blue', bottomFabricHex: '#2252E5',
+      onepieceSize: null, onepieceCoverage: null, onepieceFabricId: null, onepieceFabricName: null, onepieceFabricHex: null,
+      personalizationName: null, marketingOptIn: false, termsAcceptedAt: '2026-11-05T11:57:00Z', paymentProvider: 'complimentary', go2payOrderId: null, paymentId: null,
+      adminNotes: null, paidEmailSentAt: '2026-11-05T12:01:00Z', basePreparedAt: null
     }
   ]
 
   return raw.map((b) => ({
     ...b,
+    isComplimentary: b.isComplimentary ?? false,
+    invitationCategory: b.invitationCategory ?? null,
     earlyBirdMismatchAt: b.earlyBirdMismatch ? '2026-11-02T10:39:00Z' : null,
     updatedAt: b.createdAt,
     bustInches: null,
@@ -226,6 +243,14 @@ export function mockBookings() {
     hipsInches: null,
     ...(MEASUREMENTS_BY_ID[b.id] || {})
   }))
+}
+
+export function mockInvitationCodes() {
+  return [
+    { id: 'ic1', category: 'event_assistant', status: 'redeemed', notes: 'for Tanya', redeemedByBookingId: 'b9', redeemedAt: '2026-11-05T12:00:00Z', createdAt: '2026-11-04T09:00:00Z' },
+    { id: 'ic2', category: 'event_assistant', status: 'active', notes: null, redeemedByBookingId: null, redeemedAt: null, createdAt: '2026-11-04T09:00:00Z' },
+    { id: 'ic3', category: 'giveaway', status: 'active', notes: 'Instagram giveaway winner', redeemedByBookingId: null, redeemedAt: null, createdAt: '2026-11-06T15:00:00Z' }
+  ]
 }
 
 function groupCount(rows, keyFn) {

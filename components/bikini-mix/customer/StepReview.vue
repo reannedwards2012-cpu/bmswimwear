@@ -105,23 +105,33 @@
         </dl>
       </section>
 
-      <section class="border-t border-ink/10 pt-6">
-        <h2 class="font-display text-base font-semibold text-ink">Your Ticket</h2>
+      <section v-if="isComplimentary" class="border-t border-ink/10 pt-6">
+        <h2 class="font-display text-base font-semibold text-ink">Your Registration</h2>
         <div class="mt-3 flex items-center justify-between text-sm text-ink/70">
-          <span>{{ displayIsEarlyBird ? 'Early Bird Ticket' : 'Ticket' }}</span>
-          <span class="font-semibold text-ink">{{ formatMoney(displayPriceXcdCents, 'XCD') }}</span>
+          <span>Complimentary — {{ complimentaryCategoryLabel }}</span>
+          <span class="font-semibold text-ink">No payment needed</span>
         </div>
       </section>
 
-      <section class="border-t border-ink/10 pt-6">
-        <div class="flex items-baseline justify-between">
-          <span class="font-display text-base font-semibold text-ink">Total</span>
-          <span class="font-display text-2xl font-semibold text-ink">{{ formatMoney(displayPriceXcdCents, 'XCD') }}</span>
-        </div>
-        <p class="mt-1 text-right text-sm text-ink/55">
-          Charged as <strong class="text-ink">{{ usdLabel }}</strong>
-        </p>
-      </section>
+      <template v-else>
+        <section class="border-t border-ink/10 pt-6">
+          <h2 class="font-display text-base font-semibold text-ink">Your Ticket</h2>
+          <div class="mt-3 flex items-center justify-between text-sm text-ink/70">
+            <span>{{ displayIsEarlyBird ? 'Early Bird Ticket' : 'Ticket' }}</span>
+            <span class="font-semibold text-ink">{{ formatMoney(displayPriceXcdCents, 'XCD') }}</span>
+          </div>
+        </section>
+
+        <section class="border-t border-ink/10 pt-6">
+          <div class="flex items-baseline justify-between">
+            <span class="font-display text-base font-semibold text-ink">Total</span>
+            <span class="font-display text-2xl font-semibold text-ink">{{ formatMoney(displayPriceXcdCents, 'XCD') }}</span>
+          </div>
+          <p class="mt-1 text-right text-sm text-ink/55">
+            Charged as <strong class="text-ink">{{ usdLabel }}</strong>
+          </p>
+        </section>
+      </template>
     </div>
 
     <!-- cancellation & refund policy -->
@@ -155,8 +165,9 @@
          checkout response came back regular-priced (slots filled between
          page load and the click), stop here and get explicit confirmation
          before redirecting to Go2Pay — the customer is never silently sent
-         to pay more than what they saw. -->
-    <div v-if="priceChangeConfirm" class="mt-6 rounded-3xl bg-coral/10 p-5 text-center">
+         to pay more than what they saw. Never applies to a complimentary
+         registration — there is no price to change. -->
+    <div v-if="!isComplimentary && priceChangeConfirm" class="mt-6 rounded-3xl bg-coral/10 p-5 text-center">
       <p class="text-sm font-semibold text-ink">Early Bird pricing is no longer available</p>
       <p class="mt-1 text-sm text-ink/70">
         Your total is now {{ formatMoney(priceChangeConfirm.retailPriceXcdCents, 'XCD') }}
@@ -168,7 +179,7 @@
       </div>
     </div>
 
-    <div v-else-if="previewMode && previewResult" class="mt-8 rounded-3xl bg-seafoam/20 p-5 text-center">
+    <div v-else-if="!isComplimentary && previewMode && previewResult" class="mt-8 rounded-3xl bg-seafoam/20 p-5 text-center">
       <p class="text-sm font-semibold text-ink">Preview mode — no payment was made</p>
       <p class="mt-1 text-sm text-ink/70">
         This would redirect to Go2Pay to charge
@@ -179,7 +190,9 @@
 
     <div v-else class="mt-8 flex flex-col items-center gap-2">
       <!-- Cloudflare Turnstile — skipped entirely in preview/test mode (no real
-           checkout call either way) and when no site key is configured. -->
+           checkout call either way) and when no site key is configured. Still
+           required for a complimentary registration — it's a real, bot-
+           exposed server mutation like any other, same as the paid flow. -->
       <div v-if="turnstileSiteKey && !previewMode && !testMode" ref="turnstileEl" class="w-full max-w-sm" />
 
       <button
@@ -188,10 +201,21 @@
         :disabled="!policyAccepted || paying || requiresTurnstile"
         @click="payNow"
       >
-        {{ paying ? 'Starting payment…' : previewMode ? `Preview Pay ${usdLabel}` : testMode ? 'Start Test Payment (USD$1.00)' : `Pay ${usdLabel}` }}
+        {{
+          paying
+            ? (isComplimentary ? 'Confirming registration…' : 'Starting payment…')
+            : isComplimentary
+              ? 'Confirm Complimentary Registration'
+              : previewMode
+                ? `Preview Pay ${usdLabel}`
+                : testMode
+                  ? 'Start Test Payment (USD$1.00)'
+                  : `Pay ${usdLabel}`
+        }}
       </button>
       <p class="text-xs text-ink/40">
-        <template v-if="previewMode">Preview mode — clicking this never charges anything or contacts Go2Pay.</template>
+        <template v-if="isComplimentary">No payment is required — this registration is complimentary.</template>
+        <template v-else-if="previewMode">Preview mode — clicking this never charges anything or contacts Go2Pay.</template>
         <template v-else-if="testMode">Admin test mode — charges a fixed USD$1.00 test amount, never the real ticket price.</template>
         <template v-else>You'll be taken to Go2Pay to complete your payment securely.</template>
       </p>
@@ -247,6 +271,10 @@ const requiresTurnstile = computed(
 // checkout endpoint responds).
 const hasMeasurements = computed(() => Boolean(props.details.bust || props.details.underbust || props.details.waist || props.details.hips))
 
+const COMP_CATEGORY_LABELS = { event_assistant: 'Event Assistant', giveaway: 'Giveaway', other: 'Complimentary' }
+const isComplimentary = computed(() => Boolean(props.details.invitationCategory))
+const complimentaryCategoryLabel = computed(() => COMP_CATEGORY_LABELS[props.details.invitationCategory] || '')
+
 const displayIsEarlyBird = computed(() => checkoutResultIsEarlyBird.value ?? props.earlyBirdAvailable)
 const displayPriceXcdCents = computed(() => checkoutResultPrice.value ?? (displayIsEarlyBird.value ? props.earlyBirdPriceXcdCents : props.regularPriceXcdCents))
 const checkoutResultIsEarlyBird = ref(null)
@@ -278,11 +306,15 @@ function buildCheckoutBody() {
     marketingOptIn: props.marketingOptIn === true,
     termsAccepted: props.policyAccepted === true,
     company: props.details.company || '',
-    turnstileToken: turnstileToken.value
+    turnstileToken: turnstileToken.value,
+    ...(isComplimentary.value ? { code: props.details.invitationCode } : {})
   }
 }
 
 async function submitCheckout(body) {
+  if (isComplimentary.value) {
+    return await $fetch('/api/bikini-mix/checkout-comp', { method: 'POST', body })
+  }
   return props.testMode
     ? await (async () => {
         const { getAccessToken } = useAuth()

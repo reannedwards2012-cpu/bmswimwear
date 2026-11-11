@@ -18,7 +18,8 @@ import { sendTransactionalEmail } from './brevo.js'
 import {
   bikiniMixBookingConfirmationEmail,
   bikiniMixBookingNeedsReviewEmail,
-  bikiniMixBookingAdminEmail
+  bikiniMixBookingAdminEmail,
+  bikiniMixComplimentaryBookingEmail
 } from './emailTemplates.js'
 import { siteUrl } from './siteUrl.js'
 
@@ -96,8 +97,17 @@ export async function maybeSendBikiniMixBookingEmails(supabase, bookingId) {
     }
 
     // ── 3. Customer email — gates the durable marker ─────────────────────
-    const custTemplate =
-      view.status === 'confirmed' ? bikiniMixBookingConfirmationEmail(view) : bikiniMixBookingNeedsReviewEmail(view)
+    // A complimentary booking ALWAYS uses its own template, never the paid
+    // confirmation/needs-review ones — per explicit review feedback, this
+    // must never be confused with (or accidentally reuse wording from) an
+    // actual payment. A complimentary booking is also always 'confirmed'
+    // (claim_bikini_mix_comp_booking() never produces 'paid_needs_review'),
+    // so the needs-review branch is structurally unreachable for it anyway.
+    const custTemplate = view.isComplimentary
+      ? bikiniMixComplimentaryBookingEmail(view)
+      : view.status === 'confirmed'
+        ? bikiniMixBookingConfirmationEmail(view)
+        : bikiniMixBookingNeedsReviewEmail(view)
     const custRes = await sendTransactionalEmail({
       to: booking.email,
       subject: custTemplate.subject,
@@ -177,6 +187,8 @@ export function buildBookingView(row, eventRow) {
     email: mapped.email,
     package: mapped.package,
     garmentType: mapped.garmentType,
+    isComplimentary: mapped.isComplimentary,
+    invitationCategory: mapped.invitationCategory,
     earlyBirdApplied: mapped.earlyBirdApplied,
     retailPriceXcdCents: mapped.retailPriceXcdCents,
     chargedUsdCents: mapped.chargedUsdCents,

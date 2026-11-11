@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { validateEventFields, validateBookingResolution, validateBookingCheckout } from '../server/utils/bikiniMixValidation.js'
+import {
+  validateEventFields,
+  validateBookingResolution,
+  validateBookingCheckout,
+  validateInvitationCodeInput,
+  validateInvitationCodeGeneration
+} from '../server/utils/bikiniMixValidation.js'
 
 describe('validateEventFields', () => {
   it('valid partial update', () => {
@@ -292,5 +298,59 @@ describe('validateBookingCheckout', () => {
   it('rounds a measurement to one decimal place', () => {
     const { fields } = validateBookingCheckout(bikiniPayload({ bustInches: 36.456 }))
     expect(fields.bustInches).toBe(36.5)
+  })
+})
+
+describe('validateEventFields — complimentary invitation caps', () => {
+  it('accepts zero and positive whole numbers for each category cap', () => {
+    const { issues, fields } = validateEventFields(
+      { compEventAssistantSlots: 2, compGiveawaySlots: 1, compOtherSlots: 0 },
+      { partial: true }
+    )
+    expect(issues).toEqual([])
+    expect(fields).toMatchObject({ compEventAssistantSlots: 2, compGiveawaySlots: 1, compOtherSlots: 0 })
+  })
+
+  it('rejects a negative or non-integer cap', () => {
+    expect(validateEventFields({ compEventAssistantSlots: -1 }, { partial: true }).issues.length).toBeGreaterThan(0)
+    expect(validateEventFields({ compGiveawaySlots: 1.5 }, { partial: true }).issues.length).toBeGreaterThan(0)
+    expect(validateEventFields({ compOtherSlots: 'two' }, { partial: true }).issues.length).toBeGreaterThan(0)
+  })
+})
+
+describe('validateInvitationCodeInput', () => {
+  it('requires a non-empty code', () => {
+    expect(validateInvitationCodeInput({ code: '' }).issues.length).toBeGreaterThan(0)
+    expect(validateInvitationCodeInput({}).issues.length).toBeGreaterThan(0)
+  })
+
+  it('accepts a well-formed code and trims it', () => {
+    const { issues, code } = validateInvitationCodeInput({ code: '  ABCD-EFGH-JKLM  ' })
+    expect(issues).toEqual([])
+    expect(code).toBe('ABCD-EFGH-JKLM')
+  })
+
+  it('rejects an absurdly long input', () => {
+    expect(validateInvitationCodeInput({ code: 'A'.repeat(100) }).issues.length).toBeGreaterThan(0)
+  })
+})
+
+describe('validateInvitationCodeGeneration', () => {
+  it('requires a valid category', () => {
+    expect(validateInvitationCodeGeneration({ category: 'not-a-category' }).issues.length).toBeGreaterThan(0)
+    expect(validateInvitationCodeGeneration({}).issues.length).toBeGreaterThan(0)
+  })
+
+  it('accepts each of the three real categories, with an optional note', () => {
+    for (const category of ['event_assistant', 'giveaway', 'other']) {
+      const { issues, fields } = validateInvitationCodeGeneration({ category, notes: 'for Shanice' })
+      expect(issues).toEqual([])
+      expect(fields).toEqual({ category, notes: 'for Shanice' })
+    }
+  })
+
+  it('defaults an absent/blank note to null', () => {
+    expect(validateInvitationCodeGeneration({ category: 'giveaway' }).fields.notes).toBeNull()
+    expect(validateInvitationCodeGeneration({ category: 'giveaway', notes: '' }).fields.notes).toBeNull()
   })
 })

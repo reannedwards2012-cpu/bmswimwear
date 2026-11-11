@@ -444,6 +444,86 @@ function bikiniMixRows(view) {
   return rows
 }
 
+const COMP_CATEGORY_LABELS = { event_assistant: 'Event Assistant', giveaway: 'Giveaway', other: 'Complimentary guest' }
+
+/**
+ * Same garment-selection rows as bikiniMixRows(), WITHOUT ever mentioning
+ * money — no "Amount paid" row exists at all, and the first row is always
+ * "Complimentary — {category}", never "Ticket"/"Early Bird"/a price. Used
+ * ONLY for a booking with is_complimentary = true, so a complimentary
+ * guest's email can never be confused with — or mistakenly reuse wording
+ * from — an actual payment receipt.
+ */
+function bikiniMixComplimentaryRows(view) {
+  const categoryLabel = COMP_CATEGORY_LABELS[view.invitationCategory] || 'Complimentary guest'
+  const rows = [['Booking reference', view.bookingRef], ['Registration', `Complimentary — ${categoryLabel}`]]
+
+  if (view.garmentType === 'onepiece') {
+    const coverageLabel = view.onepieceCoverage === 'cheeky' ? 'Cheeky' : 'Bikini'
+    rows.push(['One-piece', `Size ${view.onepieceSize}, ${coverageLabel} coverage — ${view.onepieceFabricName}`])
+  } else {
+    const styleLabel = view.bottomStyle === 'tie-side' ? 'Tie-Side' : 'Classic'
+    const coverageLabel = view.bottomCoverage === 'cheeky' ? 'Cheeky' : 'Bikini'
+    const scrunchSuffix = view.bottomScrunch ? ', scrunch' : ''
+    rows.push(['Top', `Size ${view.topSize} — ${view.leftFabricName} / ${view.rightFabricName}`])
+    rows.push(['Bottom', `${styleLabel}, ${coverageLabel} coverage${scrunchSuffix}, size ${view.bottomSize} — ${view.bottomFabricName}`])
+  }
+
+  if (view.eventDate) rows.push(['Event date', view.eventDate])
+  if (view.venue) rows.push(['Venue', view.venue])
+  return rows
+}
+
+// ── Swimsuit Mixer: complimentary registration confirmation ───────────────
+// Deliberately its own template, not a variant of bikiniMixBookingConfirmationEmail
+// — per explicit review feedback, a complimentary guest's email must never
+// say "payment received," show a dollar amount, or mention Go2Pay anywhere.
+export function bikiniMixComplimentaryBookingEmail(view = {}) {
+  const hi = view.fullName ? `Hi ${esc(view.fullName)},` : 'Hi there,'
+  const categoryLabel = COMP_CATEGORY_LABELS[view.invitationCategory] || 'Complimentary guest'
+  const rows = bikiniMixComplimentaryRows(view)
+  const rowsHtml = rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:4px 12px 4px 0;font-size:13px;color:${C.muted};white-space:nowrap;vertical-align:top;">${esc(k)}</td><td style="padding:4px 0;font-size:14px;color:${C.ink};">${esc(v)}</td></tr>`
+    )
+    .join('')
+
+  const bodyHtml = [
+    para(hi),
+    para(
+      `You're on the list — as our guest! 🍹 Your <strong>complimentary ${esc(categoryLabel)}</strong> spot at <strong>${esc(view.eventName || 'The Swimsuit Mixer')}</strong> is confirmed. No payment was needed — we can't wait to see what you create.`
+    ),
+    `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 16px;">${rowsHtml}</table>`,
+    para(
+      `Your swimsuit base will be prepared using the selections above, so there's nothing more to choose online — you'll pick your straps, beads, charms and other extras at the event.`
+    ),
+    para(`If anything looks off, just reply to this email.`),
+    para(`With love,<br><span style="color:${C.accent};">${SITE_NAME}</span>`)
+  ].join('')
+
+  const text = [
+    hi,
+    '',
+    `You're on the list as our guest! Your complimentary ${categoryLabel} spot at ${view.eventName || 'The Swimsuit Mixer'} is confirmed — no payment was needed.`,
+    '',
+    ...rows.map(([k, v]) => `${k}: ${v}`),
+    '',
+    `Your swimsuit base will be prepared using the selections above — you'll pick your straps, beads, charms and other extras at the event.`,
+    '',
+    'If anything looks off, just reply to this email.',
+    '',
+    'With love,',
+    SITE_NAME
+  ].join('\n')
+
+  return {
+    subject: `You're confirmed as our guest! Your complimentary Swimsuit Mixer spot ${view.bookingRef || ''} 🍹`,
+    html: shell({ heading: "You're on the list! 🍹", bodyHtml, preheader: `Complimentary booking ${view.bookingRef} confirmed — no payment needed.`, brand: brandHeader() }),
+    text
+  }
+}
+
 // ── Swimsuit Mixer: customer confirmation (payment verified, spot confirmed) ──
 export function bikiniMixBookingConfirmationEmail(view = {}) {
   const hi = view.fullName ? `Hi ${esc(view.fullName)},` : 'Hi there,'
@@ -531,11 +611,13 @@ export function bikiniMixBookingNeedsReviewEmail(view = {}) {
 
 // ── Swimsuit Mixer: admin notification ────────────────────────────────────────
 export function bikiniMixBookingAdminEmail(view = {}, adminUrl) {
+  const isComplimentary = view.isComplimentary === true
+  const categoryLabel = COMP_CATEGORY_LABELS[view.invitationCategory] || 'Complimentary guest'
   const rows = [
-    ['Status', view.status === 'confirmed' ? 'Confirmed' : 'NEEDS MANUAL REVIEW'],
+    ['Status', isComplimentary ? `COMPLIMENTARY — ${categoryLabel}` : view.status === 'confirmed' ? 'Confirmed (paid)' : 'NEEDS MANUAL REVIEW'],
     ['Guest', view.fullName || '—'],
     ['Email', view.email || '—'],
-    ...bikiniMixRows(view)
+    ...(isComplimentary ? bikiniMixComplimentaryRows(view) : bikiniMixRows(view))
   ]
   const rowsHtml = rows
     .map(
@@ -546,27 +628,34 @@ export function bikiniMixBookingAdminEmail(view = {}, adminUrl) {
 
   const bodyHtml = [
     para(
-      view.status === 'confirmed'
-        ? 'A Swimsuit Mixer booking has been paid and confirmed.'
-        : '⚠ A Swimsuit Mixer booking was paid but needs manual review — the event was at capacity when the payment verified.'
+      isComplimentary
+        ? `🎁 A COMPLIMENTARY Swimsuit Mixer registration (${esc(categoryLabel)}) has been confirmed — no payment was collected.`
+        : view.status === 'confirmed'
+          ? 'A Swimsuit Mixer booking has been paid and confirmed.'
+          : '⚠ A Swimsuit Mixer booking was paid but needs manual review — the event was at capacity when the payment verified.'
     ),
     `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 14px;">${rowsHtml}</table>`,
     adminUrl ? para(`<a href="${esc(adminUrl)}" style="color:${C.accent};">View booking in admin →</a>`) : ''
   ].join('')
 
   const text = [
-    view.status === 'confirmed' ? 'Swimsuit Mixer booking paid and confirmed' : 'NEEDS REVIEW: Swimsuit Mixer booking paid at capacity',
+    isComplimentary
+      ? `COMPLIMENTARY (${categoryLabel}): Swimsuit Mixer registration confirmed — no payment collected`
+      : view.status === 'confirmed'
+        ? 'Swimsuit Mixer booking paid and confirmed'
+        : 'NEEDS REVIEW: Swimsuit Mixer booking paid at capacity',
     '',
     ...rows.map(([k, v]) => `${k}: ${v}`),
     ...(adminUrl ? ['', `Admin: ${adminUrl}`] : [])
   ].join('\n')
 
   return {
-    subject:
-      view.status === 'confirmed'
+    subject: isComplimentary
+      ? `🎁 Complimentary Swimsuit Mixer registration — ${view.bookingRef || ''}`
+      : view.status === 'confirmed'
         ? `Swimsuit Mixer booking confirmed — ${view.bookingRef || ''}`
         : `⚠ Needs review: Swimsuit Mixer booking ${view.bookingRef || ''}`,
-    html: shell({ heading: 'Swimsuit Mixer booking', bodyHtml }),
+    html: shell({ heading: isComplimentary ? 'Complimentary registration' : 'Swimsuit Mixer booking', bodyHtml }),
     text
   }
 }

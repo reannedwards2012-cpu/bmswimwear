@@ -66,13 +66,16 @@
               <span v-if="b.earlyBirdMismatch" class="ml-2 rounded-full bg-blush/30 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-widest2 text-ink/60">
                 honored at cutoff
               </span>
+              <span v-if="b.isComplimentary" class="ml-2 rounded-full bg-seafoam px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-widest2 text-ink">
+                Complimentary · {{ CATEGORY_LABELS[b.invitationCategory] || b.invitationCategory }}
+              </span>
             </td>
             <td class="px-5 py-4">
               <p class="text-ink">{{ b.fullName }}</p>
               <p class="text-xs text-ink/40">{{ b.email }}</p>
             </td>
             <td class="px-5 py-4 text-ink/70">{{ b.garmentType === 'onepiece' ? 'One-Piece' : 'Bikini' }}</td>
-            <td class="px-5 py-4 text-ink/70">{{ formatMoney(b.retailPriceXcdCents, 'XCD') }}</td>
+            <td class="px-5 py-4 text-ink/70">{{ b.isComplimentary ? 'Complimentary' : formatMoney(b.retailPriceXcdCents, 'XCD') }}</td>
             <td class="px-5 py-4">
               <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(b.displayStatus)">
                 {{ statusLabel(b.displayStatus) }}
@@ -116,6 +119,7 @@ const garmentOptions = [
   { value: 'bikini', label: 'Bikini' },
   { value: 'onepiece', label: 'One-Piece' }
 ]
+const CATEGORY_LABELS = { event_assistant: 'Event Assistant', giveaway: 'Giveaway', other: 'Other' }
 
 function isNotConfigured(err) {
   return err?.statusCode === 503 || err?.data?.configured === false

@@ -27,6 +27,9 @@ const COLUMN_BY_FIELD = {
   earlyBirdPriceXcdCents: 'early_bird_price_xcd_cents',
   earlyBirdSlots: 'early_bird_slots',
   ticketInclusions: 'ticket_inclusions',
+  compEventAssistantSlots: 'comp_event_assistant_slots',
+  compGiveawaySlots: 'comp_giveaway_slots',
+  compOtherSlots: 'comp_other_slots',
   holdMinutes: 'hold_minutes',
   topSizeGuide: 'top_size_guide',
   bottomSizeGuide: 'bottom_size_guide'

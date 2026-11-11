@@ -131,6 +131,29 @@
         </p>
       </section>
 
+      <!-- complimentary invitation caps -->
+      <section class="rounded-4xl bg-cream p-6 shadow-card md:p-7">
+        <h2 class="font-display text-lg font-semibold text-ink">Complimentary Invitation Caps</h2>
+        <p class="mt-1 text-xs text-ink/45">
+          How many free invitation codes can be generated per category — see the Invitations tab to generate and
+          manage codes. These never affect the {{ form.capacity }}-paid-spot capacity above.
+        </p>
+        <div class="mt-4 grid gap-4 sm:grid-cols-3">
+          <label class="block">
+            <span class="lbl">Event Assistant</span>
+            <input v-model="form.compEventAssistantSlots" type="number" min="0" step="1" class="inp" />
+          </label>
+          <label class="block">
+            <span class="lbl">Giveaway</span>
+            <input v-model="form.compGiveawaySlots" type="number" min="0" step="1" class="inp" />
+          </label>
+          <label class="block">
+            <span class="lbl">Other</span>
+            <input v-model="form.compOtherSlots" type="number" min="0" step="1" class="inp" />
+          </label>
+        </div>
+      </section>
+
       <!-- size guide -->
       <section class="rounded-4xl bg-cream p-6 shadow-card md:p-7">
         <h2 class="font-display text-lg font-semibold text-ink">Size Guide</h2>
@@ -338,6 +361,9 @@ function fromEvent(e) {
     regularPriceXcdCents: centsToInput(e.regularPriceXcdCents),
     earlyBirdPriceXcdCents: centsToInput(e.earlyBirdPriceXcdCents),
     earlyBirdSlots: e.earlyBirdSlots ?? 3,
+    compEventAssistantSlots: e.compEventAssistantSlots ?? 2,
+    compGiveawaySlots: e.compGiveawaySlots ?? 1,
+    compOtherSlots: e.compOtherSlots ?? 0,
     ticketInclusions: [...(e.ticketInclusions ?? [])],
     topSizeGuide: (e.topSizeGuide ?? []).map((r) => ({ ...r })),
     bottomSizeGuide: (e.bottomSizeGuide ?? []).map((r) => ({ ...r }))
@@ -494,6 +520,9 @@ async function onSave() {
     regularPriceXcdCents: toCentsOrNull(form.value.regularPriceXcdCents),
     earlyBirdPriceXcdCents: toCentsOrNull(form.value.earlyBirdPriceXcdCents),
     earlyBirdSlots: form.value.earlyBirdSlots === '' ? undefined : Number(form.value.earlyBirdSlots),
+    compEventAssistantSlots: form.value.compEventAssistantSlots === '' ? undefined : Number(form.value.compEventAssistantSlots),
+    compGiveawaySlots: form.value.compGiveawaySlots === '' ? undefined : Number(form.value.compGiveawaySlots),
+    compOtherSlots: form.value.compOtherSlots === '' ? undefined : Number(form.value.compOtherSlots),
     ticketInclusions: form.value.ticketInclusions,
     topSizeGuide: form.value.topSizeGuide,
     bottomSizeGuide: form.value.bottomSizeGuide

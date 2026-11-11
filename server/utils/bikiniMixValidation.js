@@ -2,6 +2,8 @@
  * Server-side validation for admin Bikini Mix writes. Mirrors the style of
  * server/utils/stockistValidation.js / fabricValidation.js.
  */
+import { INVITATION_CATEGORIES } from './bikiniMixInvitationCodes.js'
+
 const SIZES = ['XS', 'S', 'M', 'L', 'XL']
 const MAX = {
   eventName: 160,
@@ -162,6 +164,17 @@ export function validateEventFields(body, { partial = true } = {}) {
     const n = intOrNull(b.earlyBirdSlots)
     if (n === null || Number.isNaN(n) || !Number.isInteger(n) || n <= 0) issues.push('Early Bird slot count must be a whole number greater than zero.')
     out.earlyBirdSlots = n
+  }
+  for (const [key, label] of [
+    ['compEventAssistantSlots', 'Event Assistant invitation cap'],
+    ['compGiveawaySlots', 'Giveaway invitation cap'],
+    ['compOtherSlots', 'Other invitation cap']
+  ]) {
+    if (provided(key)) {
+      const n = intOrNull(b[key])
+      if (n === null || Number.isNaN(n) || !Number.isInteger(n) || n < 0) issues.push(`${label} must be a whole number of 0 or more.`)
+      out[key] = n
+    }
   }
   if (provided('ticketInclusions')) {
     const { issues: i, values } = validateInclusions(b.ticketInclusions, 'Ticket inclusions')
@@ -327,6 +340,29 @@ export function validateBookingCheckout(body) {
   }
 
   return { issues, fields: out }
+}
+
+const MAX_CODE_INPUT_LENGTH = 40 // the real code is 14 chars incl. dashes — generous ceiling against junk input, not a real constraint
+
+/** The code a guest typed in — server/api/bikini-mix/invitation-code/check.post.js and checkout-comp.post.js. */
+export function validateInvitationCodeInput(body) {
+  const issues = []
+  const b = body && typeof body === 'object' ? body : {}
+  const raw = str(b.code)
+  if (!raw) issues.push('Please enter an invitation code.')
+  else if (raw.length > MAX_CODE_INPUT_LENGTH) issues.push('That code is too long.')
+  return { issues, code: raw }
+}
+
+/** Admin-only code generation — server/api/admin/bikini-mix/invitation-codes/index.post.js. */
+export function validateInvitationCodeGeneration(body) {
+  const issues = []
+  const b = body && typeof body === 'object' ? body : {}
+  const category = str(b.category)
+  if (!INVITATION_CATEGORIES.includes(category)) issues.push(`category must be one of: ${INVITATION_CATEGORIES.join(', ')}.`)
+  const notes = isEmpty(b.notes) ? null : str(b.notes)
+  if (notes && notes.length > MAX.caption) issues.push('Note is too long.')
+  return { issues, fields: { category, notes } }
 }
 
 /**

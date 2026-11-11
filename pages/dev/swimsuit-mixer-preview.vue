@@ -121,6 +121,9 @@ const event = ref({
   regularPriceXcdCents: 25000,
   earlyBirdPriceXcdCents: 22500,
   earlyBirdSlots: 3,
+  compEventAssistantSlots: 2,
+  compGiveawaySlots: 1,
+  compOtherSlots: 0,
   ticketInclusions: [
     'Your choice of bikini or one-piece swimsuit',
     'Straps included',
@@ -206,7 +209,7 @@ const ONEPIECE_ONLY_DEFAULTS = () => ({ onepieceSize: 'M', onepieceCoverage: 'bi
 
 const currentStep = ref(1)
 const build = ref({ garmentType: null, ...BIKINI_ONLY_DEFAULTS(), ...ONEPIECE_ONLY_DEFAULTS() })
-const details = ref({ fullName: '', email: '', whatsapp: '', bust: '', underbust: '', waist: '', hips: '' })
+const details = ref({ fullName: '', email: '', whatsapp: '', bust: '', underbust: '', waist: '', hips: '', invitationCode: '', invitationCategory: null, company: '' })
 const marketingOptIn = ref(false)
 const policyAccepted = ref(false)
 

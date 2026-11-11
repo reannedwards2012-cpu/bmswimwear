@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapEvent, mapPublicEvent, mapBookingListItem, mapBookingDetail, formatBookingNumber } from '../server/utils/bikiniMixMappers.js'
+import { mapEvent, mapPublicEvent, mapBookingListItem, mapBookingDetail, mapInvitationCode, formatBookingNumber } from '../server/utils/bikiniMixMappers.js'
 
 function eventRow(overrides = {}) {
   return {
@@ -256,5 +256,60 @@ describe('mapBookingDetail — variant distinctness survives mapping', () => {
     expect(detail.rightFabricName).toBe('Red')
     expect(detail.bottomFabricName).toBe('Yellow')
     expect(detail.leftFabricName).not.toBe(detail.rightFabricName)
+  })
+})
+
+describe('mapBookingListItem / mapBookingDetail — complimentary invitation fields', () => {
+  it('surfaces isComplimentary/invitationCategory when set', () => {
+    const row = bookingRow({ is_complimentary: true, invitation_category: 'event_assistant', invitation_code_id: 'code-1', charged_usd_cents: null })
+    expect(mapBookingListItem(row)).toMatchObject({ isComplimentary: true, invitationCategory: 'event_assistant' })
+    expect(mapBookingDetail(row)).toMatchObject({ isComplimentary: true, invitationCategory: 'event_assistant', invitationCodeId: 'code-1' })
+  })
+
+  it('defaults to false/null for a normal paid booking', () => {
+    const row = bookingRow({ is_complimentary: false, invitation_category: null })
+    expect(mapBookingListItem(row)).toMatchObject({ isComplimentary: false, invitationCategory: null })
+    expect(mapBookingDetail(row)).toMatchObject({ isComplimentary: false, invitationCategory: null })
+  })
+
+  it('a synthetic historical row with no is_complimentary/invitation_category columns at all maps to false/null, never crashes', () => {
+    const row = bookingRow()
+    delete row.is_complimentary
+    delete row.invitation_category
+    expect(() => mapBookingListItem(row)).not.toThrow()
+    expect(mapBookingListItem(row)).toMatchObject({ isComplimentary: false, invitationCategory: null })
+    expect(mapBookingDetail(row)).toMatchObject({ isComplimentary: false, invitationCategory: null })
+  })
+})
+
+describe('mapEvent — complimentary invitation caps', () => {
+  it('carries the three per-category caps through', () => {
+    const mapped = mapEvent(eventRow({ comp_event_assistant_slots: 2, comp_giveaway_slots: 1, comp_other_slots: 0 }))
+    expect(mapped.compEventAssistantSlots).toBe(2)
+    expect(mapped.compGiveawaySlots).toBe(1)
+    expect(mapped.compOtherSlots).toBe(0)
+  })
+})
+
+describe('mapInvitationCode', () => {
+  it('maps every field and never exposes a plaintext code (there is no such column to begin with)', () => {
+    const row = {
+      id: 'code-1',
+      category: 'giveaway',
+      status: 'redeemed',
+      notes: 'Instagram winner',
+      redeemed_by_booking_id: 'bk-9',
+      redeemed_at: '2026-11-05T12:00:00Z',
+      created_at: '2026-11-01T00:00:00Z'
+    }
+    expect(mapInvitationCode(row)).toEqual({
+      id: 'code-1',
+      category: 'giveaway',
+      status: 'redeemed',
+      notes: 'Instagram winner',
+      redeemedByBookingId: 'bk-9',
+      redeemedAt: '2026-11-05T12:00:00Z',
+      createdAt: '2026-11-01T00:00:00Z'
+    })
   })
 })

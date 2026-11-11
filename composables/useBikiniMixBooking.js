@@ -56,6 +56,15 @@ function defaultDetails() {
     underbust: '',
     waist: '',
     hips: '',
+    // Complimentary invitation code (Step 3) — invitationCode is the raw
+    // text the guest typed; invitationCategory is set ONLY once
+    // server/api/bikini-mix/invitation-code/check.post.js confirms it's
+    // currently valid, and is cleared the instant the code text is edited
+    // again (see StepDetails.vue) — it's a UI hint for StepReview, never
+    // itself trusted to grant anything. The actual redemption is always
+    // re-validated server-side, inside claim_bikini_mix_comp_booking().
+    invitationCode: '',
+    invitationCategory: null,
     // Honeypot — hidden from real guests, tempting to bots. See
     // components/bikini-mix/customer/StepDetails.vue.
     company: ''

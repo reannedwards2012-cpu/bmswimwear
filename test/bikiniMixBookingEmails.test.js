@@ -166,4 +166,37 @@ describe('maybeSendBikiniMixBookingEmails', () => {
     const [customerCallArgs] = sendTransactionalEmail.mock.calls
     expect(customerCallArgs[0].subject).toMatch(/payment is received/i)
   })
+
+  it('a complimentary booking gets its own template — never the paid confirmation one, never a dollar amount', async () => {
+    sendTransactionalEmail.mockResolvedValue({ ok: true })
+    const supabase = fakeSupabase({
+      claimResult: () => ({ data: [{ id: 'bkg-1' }], error: null }),
+      bookingRow: bookingDetailRow({ is_complimentary: true, invitation_category: 'event_assistant', charged_usd_cents: null, retail_price_xcd_cents: 0 }),
+      eventRow: { event_name: 'The Swimsuit Mixer', event_date: '2026-12-12', venue: 'The Closet, Grand Anse Shopping Center' }
+    })
+
+    await maybeSendBikiniMixBookingEmails(supabase, 'bkg-1')
+
+    const [customerCallArgs, adminCallArgs] = sendTransactionalEmail.mock.calls
+    expect(customerCallArgs[0].subject).toMatch(/complimentary/i)
+    expect(customerCallArgs[0].subject).not.toMatch(/payment/i)
+    expect(customerCallArgs[0].html).not.toMatch(/amount paid/i)
+    expect(customerCallArgs[0].text).not.toMatch(/\$\d/)
+    expect(adminCallArgs[0].subject).toMatch(/complimentary/i)
+    expect(adminCallArgs[0].html).toMatch(/COMPLIMENTARY/)
+  })
+
+  it('a normal paid booking never mentions "complimentary" anywhere', async () => {
+    sendTransactionalEmail.mockResolvedValue({ ok: true })
+    const supabase = fakeSupabase({
+      claimResult: () => ({ data: [{ id: 'bkg-1' }], error: null }),
+      bookingRow: bookingDetailRow({ is_complimentary: false }),
+      eventRow: {}
+    })
+
+    await maybeSendBikiniMixBookingEmails(supabase, 'bkg-1')
+
+    const [customerCallArgs] = sendTransactionalEmail.mock.calls
+    expect(customerCallArgs[0].html.toLowerCase()).not.toContain('complimentary')
+  })
 })
